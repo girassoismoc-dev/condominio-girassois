@@ -547,7 +547,7 @@ function renderServicos(){
 function popularSelectContas(hoje){
   var sel = document.getElementById('contas-mes-sel');
   sel.innerHTML = '';
-  for (var i=1;i<=12;i++){ // começa no mês fechado mais recente (o atual ainda não fechou)
+  for (var i=1;i<=2;i++){ // só os 2 últimos meses fechados (o atual ainda não fechou, meses mais antigos ficam fora)
     var d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
     var opt = document.createElement('option');
     opt.value = mesRefLabel(d); opt.textContent = mesRefLabel(d);
