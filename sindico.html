@@ -106,9 +106,10 @@
         </div>
         <div class="grid grid-2" style="margin-top:10px">
           <div class="field"><label>E-mail</label><input id="mor-email" type="email" placeholder="nome@email.com"></div>
-          <div class="field"><label>Senha de acesso (login do morador)</label><input id="mor-senha" type="text" placeholder="Ex.: 1234"></div>
+          <div class="field"><label>Senha de acesso</label><input id="mor-senha" type="text" placeholder="Ex.: 1234"></div>
         </div>
-        <button class="btn btn-primary" style="width:auto; margin-top:6px" id="btn-salvar-morador">Salvar morador</button>
+        <p style="font-size:11.5px; color:var(--muted); margin:8px 2px 0">Deixe a senha em branco pra não mexer nela. Se preencher, o morador é obrigado a trocar por uma nova no próximo login (novo cadastro sempre pede senha inicial).</p>
+        <button class="btn btn-primary" style="width:auto; margin-top:10px" id="btn-salvar-morador">Salvar morador</button>
       </div>
       <div class="card">
         <div class="card-head"><span class="card-title">Moradores cadastrados</span></div>
@@ -510,7 +511,7 @@ document.getElementById('moradores-tbody').addEventListener('click', async funct
   document.getElementById('mor-tel').value = data.telefone || '';
   document.getElementById('mor-email').value = data.email || '';
   document.getElementById('mor-tipo').value = data.tipo;
-  document.getElementById('mor-senha').value = data.senha || '';
+  document.getElementById('mor-senha').value = '';
   document.querySelector('#app-sindico [data-view="moradores"]').click();
   window.scrollTo(0,0);
 });
@@ -699,20 +700,23 @@ document.getElementById('btn-salvar-morador').addEventListener('click', async fu
   const casa = parseInt(document.getElementById('mor-casa').value,10);
   const nome = document.getElementById('mor-nome').value.trim();
   const senha = document.getElementById('mor-senha').value.trim();
-  if (!nome || !senha){ showToast('Informe nome e senha de acesso.', true); return; }
+  const isNovo = !NOMES[casa];
+  if (!nome){ showToast('Informe o nome do morador.', true); return; }
+  if (isNovo && !senha){ showToast('Defina uma senha inicial pra esse morador.', true); return; }
   const btn = this; btn.disabled = true;
-  const { error } = await supabaseClient.from('moradores').upsert({
+  const payload = {
     casa:casa, nome:nome,
     telefone: document.getElementById('mor-tel').value.trim() || null,
     email: document.getElementById('mor-email').value.trim() || null,
     tipo: document.getElementById('mor-tipo').value,
-    senha: senha,
     atualizado_em: new Date().toISOString(),
-  });
+  };
+  if (senha){ payload.senha = senha; payload.precisa_trocar_senha = true; }
+  const { error } = await supabaseClient.from('moradores').upsert(payload);
   btn.disabled = false;
   if (error){ showToast('Erro: ' + error.message, true); return; }
   document.getElementById('mor-nome').value=''; document.getElementById('mor-tel').value=''; document.getElementById('mor-email').value=''; document.getElementById('mor-senha').value='';
-  showToast('Morador da Casa ' + String(casa).padStart(2,'0') + ' atualizado!');
+  showToast('Morador da Casa ' + String(casa).padStart(2,'0') + ' atualizado' + (senha ? ' — vai precisar trocar a senha no próximo login.' : '!'));
   await carregarMoradoresENomes();
   fillCasaSelect(document.getElementById('pg-casa'), NOMES);
   fillCasaSelect(document.getElementById('db-casa'), NOMES);

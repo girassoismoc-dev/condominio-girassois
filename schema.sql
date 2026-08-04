@@ -19,6 +19,7 @@ create table if not exists moradores (
   email text,
   tipo text not null default 'Proprietário' check (tipo in ('Proprietário','Inquilino')),
   senha text not null default '1234',
+  precisa_trocar_senha boolean not null default true,
   atualizado_em timestamptz not null default now()
 );
 alter table moradores disable row level security;

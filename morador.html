@@ -11,7 +11,23 @@
 
 <svg width="0" height="0" style="position:absolute"><defs><linearGradient id="sunPetal" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFCF57"/><stop offset="100%" stop-color="#EE8B12"/></linearGradient></defs></svg>
 
-<div id="app-morador">
+<div id="troca-senha-screen" class="hidden" style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; background:var(--page);">
+  <div class="login-card">
+    <div class="login-brand">
+      <svg class="sun-mark" width="40" height="40" viewBox="0 0 100 100"><g transform="translate(50,50)"><g id="petals-troca"></g><circle class="core" r="15"/></g></svg>
+      <h1 style="font-size:19px">Troque sua senha</h1>
+      <div class="loc" style="text-transform:none; letter-spacing:normal; font-size:12px">Primeiro acesso — defina uma senha só sua antes de continuar.</div>
+    </div>
+    <form id="troca-senha-form">
+      <div class="field"><label for="nova-senha">Nova senha</label><input id="nova-senha" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="confirma-senha">Confirmar nova senha</label><input id="confirma-senha" type="password" autocomplete="new-password"></div>
+      <button type="submit" class="btn btn-primary" id="btn-trocar-senha">Salvar e entrar</button>
+    </form>
+    <p class="login-error" id="troca-senha-error"></p>
+  </div>
+</div>
+
+<div id="app-morador" class="hidden">
   <div class="phone-frame">
     <div class="phone-status">
       <span id="ph-clock">--:--</span>
@@ -145,6 +161,7 @@ function petalsMarkup(n, rx, ry, cy){
   return s;
 }
 document.getElementById('petals-phone').innerHTML = petalsMarkup(12, 9, 21, -21);
+document.getElementById('petals-troca').innerHTML = petalsMarkup(12, 9, 21, -21);
 document.querySelectorAll('.core').forEach(function(core){
   var g = core.parentNode;
   for (var i=0;i<10;i++){
@@ -570,7 +587,35 @@ document.getElementById('confirm-reserve').addEventListener('click', async funct
   renderCalendario(new Date());
 });
 
-carregarTudo().catch(function(err){ showToast('Erro ao carregar: ' + err.message, true); console.error(err); });
+// ---------- troca de senha obrigatória (primeiro acesso / reset) ----------
+function mostrarApp(){
+  document.getElementById('troca-senha-screen').classList.add('hidden');
+  document.getElementById('app-morador').classList.remove('hidden');
+  carregarTudo().catch(function(err){ showToast('Erro ao carregar: ' + err.message, true); console.error(err); });
+}
+
+document.getElementById('troca-senha-form').addEventListener('submit', async function(e){
+  e.preventDefault();
+  var erroEl = document.getElementById('troca-senha-error');
+  erroEl.classList.remove('on');
+  var nova = document.getElementById('nova-senha').value;
+  var confirma = document.getElementById('confirma-senha').value;
+  if (!nova || nova.length < 4){ erroEl.textContent = 'A senha precisa ter pelo menos 4 caracteres.'; erroEl.classList.add('on'); return; }
+  if (nova !== confirma){ erroEl.textContent = 'As senhas não são iguais.'; erroEl.classList.add('on'); return; }
+  var btn = document.getElementById('btn-trocar-senha');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  const { error } = await supabaseClient.from('moradores').update({ senha: nova, precisa_trocar_senha: false }).eq('casa', CASA);
+  btn.disabled = false; btn.textContent = 'Salvar e entrar';
+  if (error){ erroEl.textContent = 'Erro ao salvar: ' + error.message; erroEl.classList.add('on'); return; }
+  sessionStorage.setItem('precisaTrocarSenha', '0');
+  mostrarApp();
+});
+
+if (sessionStorage.getItem('precisaTrocarSenha') === '1'){
+  document.getElementById('troca-senha-screen').classList.remove('hidden');
+} else {
+  mostrarApp();
+}
 </script>
 </body>
 </html>

@@ -111,12 +111,13 @@ document.getElementById('login-form').addEventListener('submit', async function(
     } else {
       var casa = parseInt(selCasa.value, 10);
       if (!senha){ showError('Informe a senha da casa.'); return; }
-      const { data, error } = await supabaseClient.from('moradores').select('casa,nome,senha').eq('casa', casa).maybeSingle();
+      const { data, error } = await supabaseClient.from('moradores').select('casa,nome,senha,precisa_trocar_senha').eq('casa', casa).maybeSingle();
       if (error){ showError('Erro ao consultar: ' + error.message); return; }
       if (!data){ showError('Essa casa ainda não tem morador cadastrado. Fale com o síndico.'); return; }
       if (String(data.senha) !== senha){ showError('Senha incorreta.'); return; }
       sessionStorage.setItem('casaLogada', String(casa));
       sessionStorage.setItem('nomeMorador', data.nome);
+      sessionStorage.setItem('precisaTrocarSenha', data.precisa_trocar_senha ? '1' : '0');
       location.href = 'morador.html';
     }
   } catch (err) {
