@@ -92,6 +92,7 @@ create table if not exists receitas (
   descricao text not null,
   valor numeric not null,
   data date,
+  pagamento_id uuid references pagamentos(id) on delete cascade, -- setado quando a receita veio automático de um pagamento de taxa
   criado_em timestamptz not null default now()
 );
 alter table receitas disable row level security;
