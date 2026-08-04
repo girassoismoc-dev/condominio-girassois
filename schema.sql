@@ -91,6 +91,7 @@ create table if not exists receitas (
   mes_ref text not null,        -- ex.: "2026-07"
   descricao text not null,
   valor numeric not null,
+  data date,
   criado_em timestamptz not null default now()
 );
 alter table receitas disable row level security;
@@ -100,6 +101,7 @@ create table if not exists despesas (
   mes_ref text not null,
   descricao text not null,
   valor numeric not null,
+  data date,
   criado_em timestamptz not null default now()
 );
 alter table despesas disable row level security;

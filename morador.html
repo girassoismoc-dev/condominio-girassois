@@ -575,7 +575,7 @@ function renderContas(){
       '<div class="card stat"><div class="stat-label">Saldo em caixa · ' + label + '</div><div class="stat-value num" style="font-size:19px">' + brl(fechamento ? fechamento.saldo_caixa : 0) + '</div><div class="stat-delta">Sem o fundo de reserva</div></div></div>';
     if (!fechamento) html += '<p style="font-size:12.5px; color:var(--muted); margin:2px 2px 0">Fundo/caixa de ' + label + ' ainda não foi lançado pelo síndico.</p>';
     html += '<div class="card"><div class="card-head"><span class="card-title">Despesas do mês</span></div><table><tbody>';
-    html += despesas.length ? despesas.map(function(d){ return '<tr><td>'+d.descricao+'</td><td class="right num">'+brl(d.valor)+'</td></tr>'; }).join('') : '<tr><td style="color:var(--muted)">Nenhuma despesa lançada.</td></tr>';
+    html += despesas.length ? despesas.map(function(d){ return '<tr><td>'+d.descricao+'</td><td>'+(d.data ? new Date(d.data+'T12:00:00').toLocaleDateString('pt-BR') : '—')+'</td><td class="right num">'+brl(d.valor)+'</td></tr>'; }).join('') : '<tr><td style="color:var(--muted)">Nenhuma despesa lançada.</td></tr>';
     html += '</tbody></table></div>';
     if (doc) html += '<div class="card">' + docRow(doc.nome, 'Publicado em ' + new Date(doc.publicado_em).toLocaleDateString('pt-BR'), doc.url) + '</div>';
     else html += '<p style="font-size:12.5px; color:var(--muted); margin:2px">Nenhum PDF de prestação de contas publicado para ' + label + '.</p>';

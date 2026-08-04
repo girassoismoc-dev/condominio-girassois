@@ -197,6 +197,7 @@
           <div class="form-grid" style="margin-top:14px">
             <div class="field"><label>Descrição</label><input id="rc-desc" type="text" placeholder="Ex.: Aluguel do salão"></div>
             <div class="field"><label>Valor (R$)</label><input id="rc-valor" type="number" step="0.01" placeholder="0,00"></div>
+            <div class="field"><label>Data</label><input id="rc-data" type="date"></div>
           </div>
           <button class="btn btn-ghost btn-sm" style="width:auto; margin-top:10px" id="btn-add-receita">+ Adicionar receita</button>
         </div>
@@ -206,6 +207,7 @@
           <div class="form-grid" style="margin-top:14px">
             <div class="field"><label>Descrição</label><input id="ds-desc" type="text" placeholder="Ex.: Reparo do portão"></div>
             <div class="field"><label>Valor (R$)</label><input id="ds-valor" type="number" step="0.01" placeholder="0,00"></div>
+            <div class="field"><label>Data</label><input id="ds-data" type="date"></div>
           </div>
           <button class="btn btn-ghost btn-sm" style="width:auto; margin-top:10px" id="btn-add-despesa">+ Adicionar despesa</button>
         </div>
@@ -414,6 +416,8 @@ async function iniciar(){
   fillMesSelect(document.getElementById('pg-mes'));
   fillMesSelect(document.getElementById('contas-mes'));
   document.getElementById('pg-data').valueAsDate = new Date();
+  document.getElementById('rc-data').valueAsDate = new Date();
+  document.getElementById('ds-data').valueAsDate = new Date();
 
   await Promise.all([ carregarMoradoresENomes(), carregarCasas() ]);
   fillCasaSelect(document.getElementById('pg-casa'), NOMES);
@@ -696,11 +700,11 @@ async function renderContas(){
     '<div class="card stat"><div class="stat-label">Saldo em caixa — ' + label + '</div><div class="stat-value num" style="font-size:22px">' + brl(fechamento ? fechamento.saldo_caixa : 0) + '</div><div class="stat-delta">Sem o fundo de reserva</div></div>';
 
   document.getElementById('s-receitas-tbody').innerHTML = (receitas&&receitas.length) ? receitas.map(function(r){
-    return '<tr><td>'+r.descricao+'</td><td class="right num">'+brl(r.valor)+'</td><td class="right"><button class="btn btn-ghost btn-sm" data-del-receita="'+r.id+'">×</button></td></tr>';
-  }).join('') : '<tr><td colspan="3" style="color:var(--muted)">Nenhuma receita lançada.</td></tr>';
+    return '<tr><td>'+r.descricao+'</td><td>'+(r.data ? new Date(r.data+'T12:00:00').toLocaleDateString('pt-BR') : '—')+'</td><td class="right num">'+brl(r.valor)+'</td><td class="right"><button class="btn btn-ghost btn-sm" data-del-receita="'+r.id+'">×</button></td></tr>';
+  }).join('') : '<tr><td colspan="4" style="color:var(--muted)">Nenhuma receita lançada.</td></tr>';
   document.getElementById('s-despesas-tbody').innerHTML = (despesas&&despesas.length) ? despesas.map(function(r){
-    return '<tr><td>'+r.descricao+'</td><td class="right num">'+brl(r.valor)+'</td><td class="right"><button class="btn btn-ghost btn-sm" data-del-despesa="'+r.id+'">×</button></td></tr>';
-  }).join('') : '<tr><td colspan="3" style="color:var(--muted)">Nenhuma despesa lançada.</td></tr>';
+    return '<tr><td>'+r.descricao+'</td><td>'+(r.data ? new Date(r.data+'T12:00:00').toLocaleDateString('pt-BR') : '—')+'</td><td class="right num">'+brl(r.valor)+'</td><td class="right"><button class="btn btn-ghost btn-sm" data-del-despesa="'+r.id+'">×</button></td></tr>';
+  }).join('') : '<tr><td colspan="4" style="color:var(--muted)">Nenhuma despesa lançada.</td></tr>';
 
   document.getElementById('sind-prestacao-doc').innerHTML = doc ? docRow(doc.nome, 'Publicado em ' + new Date(doc.publicado_em).toLocaleDateString('pt-BR'), doc.url) : '<p style="color:var(--muted); font-size:13px; margin-bottom:8px">Nenhuma prestação de contas publicada pra ' + label + ' ainda.</p>';
 }
@@ -804,19 +808,21 @@ document.getElementById('btn-add-servico').addEventListener('click', async funct
   renderServicos();
 });
 
-async function addLancamento(tabela, descId, valorId){
+async function addLancamento(tabela, descId, valorId, dataId){
   const desc = document.getElementById(descId).value.trim();
   const valor = parseFloat(document.getElementById(valorId).value);
-  if (!desc || !valor){ showToast('Preencha a descrição e o valor.', true); return; }
+  const data = document.getElementById(dataId).value;
+  if (!desc || !valor || !data){ showToast('Preencha a descrição, o valor e a data.', true); return; }
   const label = document.getElementById('contas-mes').value || mesRefLabel(new Date());
-  const { error } = await supabaseClient.from(tabela).insert({ mes_ref: label, descricao: desc, valor: valor });
+  const { error } = await supabaseClient.from(tabela).insert({ mes_ref: label, descricao: desc, valor: valor, data: data });
   if (error){ showToast('Erro: ' + error.message, true); return; }
   document.getElementById(descId).value=''; document.getElementById(valorId).value='';
+  document.getElementById(dataId).valueAsDate = new Date();
   showToast('Lançamento adicionado!');
   renderContas();
 }
-document.getElementById('btn-add-receita').addEventListener('click', function(){ addLancamento('receitas','rc-desc','rc-valor'); });
-document.getElementById('btn-add-despesa').addEventListener('click', function(){ addLancamento('despesas','ds-desc','ds-valor'); });
+document.getElementById('btn-add-receita').addEventListener('click', function(){ addLancamento('receitas','rc-desc','rc-valor','rc-data'); });
+document.getElementById('btn-add-despesa').addEventListener('click', function(){ addLancamento('despesas','ds-desc','ds-valor','ds-data'); });
 
 document.getElementById('btn-salvar-fundos').addEventListener('click', async function(){
   const f = parseFloat(document.getElementById('fr-fundo').value);
