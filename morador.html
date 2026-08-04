@@ -613,11 +613,14 @@ function renderContas(){
     if (!fechamento) html += '<p style="font-size:12.5px; color:var(--muted); margin:2px 2px 0">Fundo/caixa de ' + label + ' ainda não foi lançado pelo síndico.</p>';
 
     const receitasTaxa = receitas.filter(function(r){ return r.pagamento_id; });
-    const receitasOutras = receitas.filter(function(r){ return !r.pagamento_id; });
+    const receitasDebito = receitas.filter(function(r){ return !r.pagamento_id && r.descricao && r.descricao.indexOf('Débito antigo pago') === 0; });
+    const receitasOutras = receitas.filter(function(r){ return !r.pagamento_id && !(r.descricao && r.descricao.indexOf('Débito antigo pago') === 0); });
     const totTaxas = receitasTaxa.reduce(function(s,r){return s+Number(r.valor);},0);
+    const totDebitos = receitasDebito.reduce(function(s,r){return s+Number(r.valor);},0);
     html += '<div class="card"><div class="card-head"><span class="card-title">Receita do mês</span></div><table><tbody>';
     let linhasReceita = '';
     if (receitasTaxa.length) linhasReceita += '<tr><td>' + receitasTaxa.length + ' casa' + (receitasTaxa.length>1?'s':'') + ' · Taxas condominiais</td><td></td><td class="right num">' + brl(totTaxas) + '</td></tr>';
+    if (receitasDebito.length) linhasReceita += '<tr><td>' + receitasDebito.length + ' casa' + (receitasDebito.length>1?'s':'') + ' · Débitos antigos pagos</td><td></td><td class="right num">' + brl(totDebitos) + '</td></tr>';
     receitasOutras.forEach(function(r){ linhasReceita += '<tr><td>'+r.descricao+'</td><td>'+(r.data ? new Date(r.data+'T12:00:00').toLocaleDateString('pt-BR') : '—')+'</td><td class="right num">'+brl(r.valor)+'</td></tr>'; });
     html += linhasReceita || '<tr><td style="color:var(--muted)">Nenhuma receita lançada.</td></tr>';
     html += '</tbody></table></div>';

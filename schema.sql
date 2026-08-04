@@ -70,6 +70,7 @@ create table if not exists debitos_antigos (
   casa integer primary key references casas(numero),
   referente_a text not null,    -- ex.: "Jun e Jul/2026"
   valor numeric not null,
+  meses_cobertos text[],        -- ex.: ARRAY['Junho/2026','Julho/2026'] — usado pra abater automatico quando um pagamento "referente a" um desses meses é lançado
   atualizado_em timestamptz not null default now()
 );
 alter table debitos_antigos disable row level security;

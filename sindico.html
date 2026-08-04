@@ -86,8 +86,9 @@
           <div class="field"><label>Casa</label><select id="db-casa"></select></div>
           <div class="field"><label>Referente a</label><input id="db-ref" type="text" placeholder="Ex.: Mai a Jul/2026"></div>
           <div class="field"><label>Valor total (R$)</label><input id="db-valor" type="number" step="0.01" placeholder="150,00"></div>
-          <div></div>
+          <div class="field"><label>Meses cobertos por esse débito</label><select id="db-meses" multiple size="5"></select></div>
         </div>
+        <p style="font-size:11px; color:var(--muted); margin:6px 2px 0">Segure Ctrl (ou Cmd no Mac) pra marcar mais de um mês — quando um pagamento "referente a" um desses meses for lançado, ele abate direto desse débito em vez de contar como taxa normal.</p>
         <button class="btn btn-primary" style="width:auto; margin-top:12px" id="btn-lancar-debito">Salvar débito anterior</button>
         <div style="margin-top:14px">
           <table><thead><tr><th>Casa</th><th>Referente a</th><th class="right">Valor</th><th></th></tr></thead><tbody id="debitos-tbody"></tbody></table>
@@ -416,6 +417,16 @@ function fillMesSelect(sel){
     sel.appendChild(opt);
   }
 }
+function fillMesSelectMultiplo(sel){
+  sel.innerHTML = '';
+  var hoje = new Date();
+  for (var i=0;i<24;i++){
+    var d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    var opt = document.createElement('option');
+    opt.value = mesRefLabel(d); opt.textContent = mesRefLabel(d);
+    sel.appendChild(opt);
+  }
+}
 
 // ---------- state ----------
 var CONFIG = {};
@@ -430,6 +441,7 @@ async function carregarCasas(){
 async function iniciar(){
   fillMesSelect(document.getElementById('pg-mes'));
   fillMesSelect(document.getElementById('contas-mes'));
+  fillMesSelectMultiplo(document.getElementById('db-meses'));
   document.getElementById('pg-data').valueAsDate = new Date();
   document.getElementById('rc-data').valueAsDate = new Date();
   document.getElementById('ds-data').valueAsDate = new Date();
@@ -881,6 +893,23 @@ document.getElementById('btn-lancar-pagamento').addEventListener('click', async 
     return;
   }
 
+  const { data:debito } = await supabaseClient.from('debitos_antigos').select('*').eq('casa', casa).maybeSingle();
+  if (debito && (debito.meses_cobertos||[]).includes(mes)){
+    const restante = Math.round((Number(debito.valor) - valor) * 100) / 100;
+    const mesRecebido = mesRefLabel(new Date(data+'T12:00:00'));
+    if (restante <= 0.01){
+      await supabaseClient.from('debitos_antigos').delete().eq('casa', casa);
+    } else {
+      await supabaseClient.from('debitos_antigos').update({ valor: restante, atualizado_em:new Date().toISOString() }).eq('casa', casa);
+    }
+    await supabaseClient.from('receitas').insert({ mes_ref: mesRecebido, descricao:'Débito antigo pago — Casa ' + String(casa).padStart(2,'0') + ' (ref. ' + mes + ')', valor:valor, data:data });
+    btn.disabled = false;
+    document.getElementById('pg-valor').value = '';
+    showToast(restante <= 0.01 ? 'Débito antigo da Casa ' + String(casa).padStart(2,'0') + ' quitado!' : brl(valor) + ' abatido do débito antigo da Casa ' + String(casa).padStart(2,'0') + '. Restam ' + brl(restante) + '.');
+    renderDebitosTable(); renderCasasTable(); renderVisaoGeral(); renderContas();
+    return;
+  }
+
   const { data:novoPagamento, error } = await supabaseClient.from('pagamentos').insert({ casa:casa, mes_ref:mes, valor:valor, data_pagamento:data }).select().single();
   btn.disabled = false;
   if (error){ showToast('Erro: ' + error.message, true); return; }
@@ -894,12 +923,14 @@ document.getElementById('btn-lancar-debito').addEventListener('click', async fun
   const casa = parseInt(document.getElementById('db-casa').value,10);
   const ref = document.getElementById('db-ref').value.trim();
   const valor = parseFloat(document.getElementById('db-valor').value);
+  const meses = Array.from(document.getElementById('db-meses').selectedOptions).map(function(o){ return o.value; });
   if (!ref || !valor){ showToast('Preencha a referência e o valor.', true); return; }
   const btn = this; btn.disabled = true;
-  const { error } = await supabaseClient.from('debitos_antigos').upsert({ casa:casa, referente_a:ref, valor:valor, atualizado_em:new Date().toISOString() });
+  const { error } = await supabaseClient.from('debitos_antigos').upsert({ casa:casa, referente_a:ref, valor:valor, meses_cobertos:meses, atualizado_em:new Date().toISOString() });
   btn.disabled = false;
   if (error){ showToast('Erro: ' + error.message, true); return; }
   document.getElementById('db-ref').value = ''; document.getElementById('db-valor').value = '';
+  Array.from(document.getElementById('db-meses').options).forEach(function(o){ o.selected = false; });
   showToast('Débito anterior da Casa ' + String(casa).padStart(2,'0') + ' salvo!');
   renderDebitosTable(); renderCasasTable(); renderVisaoGeral();
 });
