@@ -396,6 +396,14 @@ function servicoRow(sv){
 }
 
 function pontualidade6Card(hoje){
+  if (STATE.isenta){
+    const cellsIsento = [];
+    for (let i=5;i>=0;i--){
+      const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+      cellsIsento.push('<div class="strip-cell good"><div class="m">' + MESES_PT[d.getMonth()].slice(0,3) + '</div><div class="dot"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M4 12l5 5L20 6"/></svg></div><div class="strip-tip">Isento</div></div>');
+    }
+    return '<div class="card"><div class="card-head"><span class="card-title">Sua pontualidade — 6 meses</span></div><div class="strip">' + cellsIsento.join('') + '</div></div>';
+  }
   const cells = [];
   for (let i=5;i>=0;i--){
     const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
