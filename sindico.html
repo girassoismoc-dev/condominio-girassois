@@ -6,6 +6,7 @@
 <title>Painel administrativo — Parque dos Girassóis</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -219,9 +220,10 @@
     <!-- CONFIGURAÇÕES -->
     <section class="view" data-view="config">
       <div class="card">
-        <div class="card-head"><span class="card-title">Valor da taxa, multa e juros</span></div>
-        <div class="grid grid-3">
+        <div class="card-head"><span class="card-title">Valor da taxa, vencimento, multa e juros</span></div>
+        <div class="grid grid-4">
           <div class="field"><label>Taxa mensal (R$)</label><input id="cf-taxa" type="number" step="0.01"></div>
+          <div class="field"><label>Dia do vencimento</label><input id="cf-vencimento" type="number" min="1" max="28" step="1"></div>
           <div class="field"><label>Multa por atraso, valor único (%)</label><input id="cf-multa" type="number" step="0.1"></div>
           <div class="field"><label>Juros de mora ao mês (%)</label><input id="cf-juros" type="number" step="0.1"></div>
         </div>
@@ -245,7 +247,7 @@
         </div>
         <div class="field"><label>Nome do beneficiário (aparece no QR)</label><input id="cf-pix-nome" type="text"></div>
         <button class="btn btn-primary" style="width:auto" id="btn-salvar-pix">Salvar chave Pix</button>
-        <p style="font-size:11.5px; color:var(--muted); margin-top:12px; line-height:1.5">O QR code é ilustrativo neste sistema. Pra um QR Pix real e escaneável, dá pra integrar depois com uma API de geração de Copia-e-Cola.</p>
+        <p style="font-size:11.5px; color:var(--muted); margin-top:12px; line-height:1.5">Esse QR já é real, no padrão Pix do Banco Central — pode escanear pra conferir. Aqui em cima ele não tem valor fixo (é só a chave); nas cobranças de cada morador, o QR já vem com o valor certo.</p>
       </div>
     </section>
   </main>
@@ -283,17 +285,51 @@ function showToast(text, isErr){
   setTimeout(function(){ toast.classList.remove('on'); }, 3200);
 }
 
-function renderFakeQR(el, seedBase){
-  if (!el) return;
-  var n = 21, seed = seedBase || 1337;
-  function rnd(){ seed = (seed*1103515245 + 12345) % 2147483648; return seed / 2147483648; }
-  function inEye(x,y){ return (x<7&&y<7)||(x>=n-7&&y<7)||(x<7&&y>=n-7); }
-  var svg = '<svg viewBox="0 0 '+n+' '+n+'" xmlns="http://www.w3.org/2000/svg"><rect width="'+n+'" height="'+n+'" fill="#fff"/>';
-  for (var y=0;y<n;y++){ for (var x=0;x<n;x++){ if (inEye(x,y)) continue; if (rnd() > 0.55) svg += '<rect x="'+x+'" y="'+y+'" width="1" height="1" fill="#14170F"/>'; } }
-  function eye(ox,oy){ svg += '<rect x="'+ox+'" y="'+oy+'" width="7" height="7" fill="#14170F"/><rect x="'+(ox+1)+'" y="'+(oy+1)+'" width="5" height="5" fill="#fff"/><rect x="'+(ox+2)+'" y="'+(oy+2)+'" width="3" height="3" fill="#14170F"/>'; }
-  eye(0,0); eye(n-7,0); eye(0,n-7);
-  svg += '</svg>';
-  el.innerHTML = svg;
+// ---------- QR Pix real (padrão BR Code / EMV do Banco Central) ----------
+function crc16ccitt(str){
+  var crc = 0xFFFF;
+  for (var i=0;i<str.length;i++){
+    crc ^= str.charCodeAt(i) << 8;
+    for (var j=0;j<8;j++){
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+      crc &= 0xFFFF;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4,'0');
+}
+function tlv(id, value){ return id + String(value.length).padStart(2,'0') + value; }
+var MAPA_ACENTOS_PIX = {'Á':'A','À':'A','Ã':'A','Â':'A','Ä':'A','É':'E','È':'E','Ê':'E','Ë':'E','Í':'I','Ì':'I','Î':'I','Ï':'I','Ó':'O','Ò':'O','Õ':'O','Ô':'O','Ö':'O','Ú':'U','Ù':'U','Û':'U','Ü':'U','Ç':'C','Ñ':'N'};
+function limparTextoPix(s){
+  var t = (s||'').toUpperCase(), out = '';
+  for (var i=0;i<t.length;i++){ out += MAPA_ACENTOS_PIX[t[i]] || t[i]; }
+  return out.replace(/[^A-Z0-9 ]/g,'');
+}
+function limparChavePix(chave, tipo){
+  chave = (chave||'').trim();
+  if (tipo === 'CNPJ' || tipo === 'CPF' || tipo === 'Telefone') return chave.replace(/\D/g,'');
+  return chave;
+}
+function montarPayloadPix(opts){
+  const chave = limparChavePix(opts.chave, opts.tipo);
+  const nome = limparTextoPix(opts.nome).slice(0,25) || 'RECEBEDOR';
+  const cidade = limparTextoPix(opts.cidade || 'MONTES CLAROS').slice(0,15) || 'CIDADE';
+  const txid = (opts.txid||'').replace(/[^A-Za-z0-9]/g,'').slice(0,25) || '***';
+  const merchantInfo = tlv('00','BR.GOV.BCB.PIX') + tlv('01', chave);
+  let payload = tlv('00','01') + tlv('01','11') + tlv('26', merchantInfo) + tlv('52','0000') + tlv('53','986');
+  if (opts.valor != null) payload += tlv('54', Number(opts.valor).toFixed(2));
+  payload += tlv('58','BR') + tlv('59', nome) + tlv('60', cidade) + tlv('62', tlv('05', txid));
+  payload += '6304';
+  return payload + crc16ccitt(payload);
+}
+function renderPixQR(el, opts){
+  if (!el) return null;
+  if (!opts || !opts.chave){ el.innerHTML = ''; return null; }
+  const payload = montarPayloadPix(opts);
+  el.innerHTML = '';
+  if (window.QRCode){
+    new QRCode(el, { text: payload, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+  }
+  return payload;
 }
 
 function docRow(nome, meta, url, extraBtn){
@@ -410,6 +446,7 @@ async function carregarConfig(){
   const { data } = await supabaseClient.from('config_geral').select('*').eq('id',1).maybeSingle();
   CONFIG = data || {};
   document.getElementById('cf-taxa').value = CONFIG.valor_taxa;
+  document.getElementById('cf-vencimento').value = CONFIG.dia_vencimento || 15;
   document.getElementById('cf-multa').value = CONFIG.multa_pct;
   document.getElementById('cf-juros').value = CONFIG.juros_pct;
   document.getElementById('cf-pix-tipo').value = CONFIG.pix_tipo || 'CNPJ';
@@ -421,12 +458,12 @@ async function carregarConfig(){
   document.getElementById('fr-fundo').value = CONFIG.fundo_reserva;
   document.getElementById('fr-caixa').value = CONFIG.saldo_caixa;
   atualizarPreviewTaxa();
-  renderFakeQR(document.getElementById('qr-sindico'), 1337);
+  renderPixQR(document.getElementById('qr-sindico'), { chave: CONFIG.pix_chave, tipo: CONFIG.pix_tipo, nome: CONFIG.pix_nome, txid: 'CONDOMINIO' });
 }
 function atualizarPreviewTaxa(){
   const taxa = Number(CONFIG.valor_taxa||0), multa = Number(CONFIG.multa_pct||0), juros = Number(CONFIG.juros_pct||0);
   const multaEx = taxa*multa/100, jurosEx = taxa*juros/100*(10/30);
-  document.getElementById('cf-preview').textContent = 'Exemplo: uma taxa de ' + brl(taxa) + ' com 10 dias de atraso ficaria em ' + brl(taxa+multaEx+jurosEx) + '.';
+  document.getElementById('cf-preview').textContent = 'Sem multa ou juros até 10 dias após o vencimento. Exemplo: uma taxa de ' + brl(taxa) + ' com 20 dias de atraso (10 dias após a carência) ficaria em ' + brl(taxa+multaEx+jurosEx) + '.';
 }
 
 async function renderVisaoGeral(){
@@ -456,9 +493,10 @@ async function renderVisaoGeral(){
     '<div class="legend-row"><span class="legend-item"><span class="swatch" style="background:var(--good)"></span>Em dia — ' + emDia + '</span><span class="legend-item"><span class="swatch" style="background:var(--critical)"></span>Em aberto — ' + emAberto + '</span></div>';
 
   const taxa = Number(CONFIG.valor_taxa||0), multaPct = Number(CONFIG.multa_pct||0), jurosPct = Number(CONFIG.juros_pct||0);
-  const vencimento = new Date(hoje.getFullYear(), hoje.getMonth(), 10);
+  const vencimento = new Date(hoje.getFullYear(), hoje.getMonth(), CONFIG.dia_vencimento || 15);
   const dias = Math.max(0, Math.floor((hoje-vencimento)/86400000));
-  const total = taxa + (dias>0 ? taxa*multaPct/100 + taxa*jurosPct/100*(dias/30) : 0);
+  const diasComEncargo = Math.max(0, dias - 10);
+  const total = taxa + (diasComEncargo>0 ? taxa*multaPct/100 + taxa*jurosPct/100*(diasComEncargo/30) : 0);
   let rows = '';
   for (let c=1;c<=27;c++){
     if (ISENTAS.has(c)) continue;
@@ -480,7 +518,9 @@ async function renderCasasTable(){
   for (let c=1;c<=27;c++){
     const deb = debMap[c];
     const isenta = ISENTAS.has(c);
-    const situacao = isenta ? '<span class="pill" style="background:var(--surface-2); color:var(--muted)">Isenta</span>' : (pagasSet.has(c) ? pillGood() : pillCrit('Em aberto'));
+    const situacao = isenta ? '<span class="pill" style="background:var(--surface-2); color:var(--muted)">Isenta</span>'
+      : deb ? pillCrit('Débito anterior')
+      : (pagasSet.has(c) ? pillGood() : pillCrit('Em aberto'));
     rows += '<tr><td>Casa ' + String(c).padStart(2,'0') + '</td><td>' + (NOMES[c] || '<span style="color:var(--muted)">Sem cadastro</span>') + '</td><td>' + situacao + '</td><td class="right num">' + (deb ? brl(deb.valor) : '—') + '</td><td class="right"><input type="checkbox" data-toggle-isenta="'+c+'" '+(isenta?'checked':'')+' style="width:16px; height:16px; cursor:pointer"></td></tr>';
   }
   document.getElementById('casas-tbody').innerHTML = rows;
@@ -787,14 +827,15 @@ document.getElementById('btn-salvar-fundos').addEventListener('click', async fun
 
 document.getElementById('btn-salvar-taxas').addEventListener('click', async function(){
   const taxa = parseFloat(document.getElementById('cf-taxa').value);
+  const vencimento = parseInt(document.getElementById('cf-vencimento').value,10);
   const multa = parseFloat(document.getElementById('cf-multa').value);
   const juros = parseFloat(document.getElementById('cf-juros').value);
-  if (isNaN(taxa) || isNaN(multa) || isNaN(juros)){ showToast('Preencha os três valores.', true); return; }
-  const { error } = await supabaseClient.from('config_geral').update({ valor_taxa:taxa, multa_pct:multa, juros_pct:juros, atualizado_em:new Date().toISOString() }).eq('id',1);
+  if (isNaN(taxa) || isNaN(vencimento) || vencimento<1 || vencimento>28 || isNaN(multa) || isNaN(juros)){ showToast('Preencha os valores (dia de vencimento entre 1 e 28).', true); return; }
+  const { error } = await supabaseClient.from('config_geral').update({ valor_taxa:taxa, dia_vencimento:vencimento, multa_pct:multa, juros_pct:juros, atualizado_em:new Date().toISOString() }).eq('id',1);
   if (error){ showToast('Erro: ' + error.message, true); return; }
-  CONFIG.valor_taxa = taxa; CONFIG.multa_pct = multa; CONFIG.juros_pct = juros;
+  CONFIG.valor_taxa = taxa; CONFIG.dia_vencimento = vencimento; CONFIG.multa_pct = multa; CONFIG.juros_pct = juros;
   atualizarPreviewTaxa();
-  showToast('Taxa, multa e juros atualizados!');
+  showToast('Taxa, vencimento, multa e juros atualizados!');
   renderVisaoGeral();
 });
 
@@ -809,6 +850,7 @@ document.getElementById('btn-salvar-pix').addEventListener('click', async functi
   document.getElementById('cf-pix-tipo-label').textContent = 'CHAVE PIX (' + tipo.toUpperCase() + ')';
   document.getElementById('cf-pix-atual').textContent = chave;
   document.getElementById('cf-pix-nome-atual').textContent = 'Beneficiário: ' + nome;
+  renderPixQR(document.getElementById('qr-sindico'), { chave: CONFIG.pix_chave, tipo: CONFIG.pix_tipo, nome: CONFIG.pix_nome, txid: 'CONDOMINIO' });
   showToast('Chave Pix atualizada!');
 });
 </script>

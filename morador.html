@@ -6,6 +6,7 @@
 <title>Meu painel — Parque dos Girassóis</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -97,6 +98,7 @@
           <div class="card-head"><span class="card-title">Área de Convivência</span></div>
           <div class="reserve-panel" id="reserve-panel">
             <div class="card-sub" style="margin-bottom:4px">Reservar para <span id="reserve-date" style="color:var(--ink); font-weight:700">—</span></div>
+            <div id="reserve-day-list"></div>
             <div class="grid grid-2" style="margin-top:8px">
               <div class="field"><label>Horário de início</label><input type="time" id="reserve-hora-ini" value="14:00"></div>
               <div class="field"><label>Horário de término</label><input type="time" id="reserve-hora-fim" value="18:00"></div>
@@ -110,9 +112,13 @@
           <div class="cal-grid" id="cal-grid"></div>
           <div class="cal-legend legend-row">
             <span class="legend-item"><span class="swatch" style="background:var(--surface-2); border:1px solid var(--border)"></span>Livre</span>
-            <span class="legend-item"><span class="swatch" style="background:var(--critical)"></span>Reservado</span>
+            <span class="legend-item"><span class="swatch" style="background:var(--critical)"></span>Tem reserva</span>
             <span class="legend-item"><span class="swatch" style="background:var(--accent)"></span>Você</span>
           </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-title">Minhas reservas</span></div>
+          <div id="minhas-reservas-list"></div>
         </div>
       </section>
 
@@ -160,6 +166,17 @@ function petalsMarkup(n, rx, ry, cy){
   for (var i=0;i<n;i++){ var deg = (360/n)*i; s += '<ellipse class="petal" cx="0" cy="'+cy+'" rx="'+rx+'" ry="'+ry+'" transform="rotate('+deg+')"/>'; }
   return s;
 }
+function ringGauge(pct, size, stroke){
+  size = size || 74; stroke = stroke || 7;
+  var r = (size - stroke) / 2, c = 2 * Math.PI * r;
+  var p = Math.max(0, Math.min(100, pct));
+  var off = c * (1 - p/100);
+  var color = p >= 80 ? 'var(--good)' : p >= 50 ? 'var(--warning)' : 'var(--critical)';
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" style="transform:rotate(-90deg)">' +
+    '<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="var(--border)" stroke-width="'+stroke+'"/>' +
+    '<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="'+stroke+'" stroke-linecap="round" stroke-dasharray="'+c+'" stroke-dashoffset="'+off+'"/>' +
+    '</svg>';
+}
 document.getElementById('petals-phone').innerHTML = petalsMarkup(12, 9, 21, -21);
 document.getElementById('petals-troca').innerHTML = petalsMarkup(12, 9, 21, -21);
 document.querySelectorAll('.core').forEach(function(core){
@@ -186,17 +203,51 @@ function showToast(text, isErr){
   setTimeout(function(){ toast.classList.remove('on'); }, 3200);
 }
 
-function renderFakeQR(el, seedBase){
-  if (!el) return;
-  var n = 21, seed = seedBase || 1337;
-  function rnd(){ seed = (seed*1103515245 + 12345) % 2147483648; return seed / 2147483648; }
-  function inEye(x,y){ return (x<7&&y<7)||(x>=n-7&&y<7)||(x<7&&y>=n-7); }
-  var svg = '<svg viewBox="0 0 '+n+' '+n+'" xmlns="http://www.w3.org/2000/svg"><rect width="'+n+'" height="'+n+'" fill="#fff"/>';
-  for (var y=0;y<n;y++){ for (var x=0;x<n;x++){ if (inEye(x,y)) continue; if (rnd() > 0.55) svg += '<rect x="'+x+'" y="'+y+'" width="1" height="1" fill="#14170F"/>'; } }
-  function eye(ox,oy){ svg += '<rect x="'+ox+'" y="'+oy+'" width="7" height="7" fill="#14170F"/><rect x="'+(ox+1)+'" y="'+(oy+1)+'" width="5" height="5" fill="#fff"/><rect x="'+(ox+2)+'" y="'+(oy+2)+'" width="3" height="3" fill="#14170F"/>'; }
-  eye(0,0); eye(n-7,0); eye(0,n-7);
-  svg += '</svg>';
-  el.innerHTML = svg;
+// ---------- QR Pix real (padrão BR Code / EMV do Banco Central) ----------
+function crc16ccitt(str){
+  var crc = 0xFFFF;
+  for (var i=0;i<str.length;i++){
+    crc ^= str.charCodeAt(i) << 8;
+    for (var j=0;j<8;j++){
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+      crc &= 0xFFFF;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4,'0');
+}
+function tlv(id, value){ return id + String(value.length).padStart(2,'0') + value; }
+var MAPA_ACENTOS_PIX = {'Á':'A','À':'A','Ã':'A','Â':'A','Ä':'A','É':'E','È':'E','Ê':'E','Ë':'E','Í':'I','Ì':'I','Î':'I','Ï':'I','Ó':'O','Ò':'O','Õ':'O','Ô':'O','Ö':'O','Ú':'U','Ù':'U','Û':'U','Ü':'U','Ç':'C','Ñ':'N'};
+function limparTextoPix(s){
+  var t = (s||'').toUpperCase(), out = '';
+  for (var i=0;i<t.length;i++){ out += MAPA_ACENTOS_PIX[t[i]] || t[i]; }
+  return out.replace(/[^A-Z0-9 ]/g,'');
+}
+function limparChavePix(chave, tipo){
+  chave = (chave||'').trim();
+  if (tipo === 'CNPJ' || tipo === 'CPF' || tipo === 'Telefone') return chave.replace(/\D/g,'');
+  return chave;
+}
+function montarPayloadPix(opts){
+  const chave = limparChavePix(opts.chave, opts.tipo);
+  const nome = limparTextoPix(opts.nome).slice(0,25) || 'RECEBEDOR';
+  const cidade = limparTextoPix(opts.cidade || 'MONTES CLAROS').slice(0,15) || 'CIDADE';
+  const txid = (opts.txid||'').replace(/[^A-Za-z0-9]/g,'').slice(0,25) || '***';
+  const merchantInfo = tlv('00','BR.GOV.BCB.PIX') + tlv('01', chave);
+  let payload = tlv('00','01') + tlv('01','11') + tlv('26', merchantInfo) + tlv('52','0000') + tlv('53','986');
+  if (opts.valor != null) payload += tlv('54', Number(opts.valor).toFixed(2));
+  payload += tlv('58','BR') + tlv('59', nome) + tlv('60', cidade) + tlv('62', tlv('05', txid));
+  payload += '6304';
+  return payload + crc16ccitt(payload);
+}
+function renderPixQR(el, opts){
+  if (!el) return null;
+  if (!opts || !opts.chave){ el.innerHTML = ''; return null; }
+  const payload = montarPayloadPix(opts);
+  el.innerHTML = '';
+  if (window.QRCode){
+    new QRCode(el, { text: payload, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+  }
+  return payload;
 }
 
 document.getElementById('m-logout').addEventListener('click', function(){
@@ -260,20 +311,25 @@ async function carregarTudo(){
   renderCobertura();
   renderServicos();
   renderCalendario(hoje);
+  renderMinhasReservas();
   renderContas(hoje);
 }
+
+var DIAS_CARENCIA_JUROS = 10;
 
 function calcularTaxaMes(hoje){
   const label = mesRefLabel(hoje);
   const jaPago = STATE.pagamentos.some(function(p){ return p.mes_ref === label; });
   const valorTaxa = Number(STATE.config.valor_taxa || 75);
-  const vencimento = new Date(hoje.getFullYear(), hoje.getMonth(), 10);
+  const diaVenc = STATE.config.dia_vencimento || 15;
+  const vencimento = new Date(hoje.getFullYear(), hoje.getMonth(), diaVenc);
   const diasAtraso = Math.max(0, Math.floor((hoje - vencimento) / 86400000));
+  const diasComEncargo = Math.max(0, diasAtraso - DIAS_CARENCIA_JUROS);
   const multaPct = Number(STATE.config.multa_pct || 0);
   const jurosPct = Number(STATE.config.juros_pct || 0);
-  const multa = diasAtraso > 0 ? valorTaxa * multaPct/100 : 0;
-  const juros = diasAtraso > 0 ? valorTaxa * jurosPct/100 * (diasAtraso/30) : 0;
-  return { label, jaPago, valorTaxa, vencimento, diasAtraso, multa, juros, total: valorTaxa + multa + juros };
+  const multa = diasComEncargo > 0 ? valorTaxa * multaPct/100 : 0;
+  const juros = diasComEncargo > 0 ? valorTaxa * jurosPct/100 * (diasComEncargo/30) : 0;
+  return { label, jaPago, valorTaxa, vencimento, diasAtraso, diasComEncargo, multa, juros, total: valorTaxa + multa + juros };
 }
 
 function renderInicio(hoje){
@@ -283,20 +339,26 @@ function renderInicio(hoje){
   if (STATE.debito) pend.push('Débito anterior de ' + brl(STATE.debito.valor));
 
   const pontualidade = calcularPontualidade();
+  const primeiroNome = (STATE.morador && STATE.morador.nome) ? STATE.morador.nome.split(' ')[0] : '';
 
-  let html = '<div class="card stat"><div class="stat-label">Situação atual</div>';
+  let html = '<div class="card hero-card"><div class="hero-top"><div>' +
+    '<div class="hero-greet">Olá' + (primeiroNome ? ', ' + primeiroNome : '') + '!</div>' +
+    '<div class="hero-casa">Casa ' + String(CASA).padStart(2,'0') + '</div></div>' +
+    '<svg class="hero-sun" width="46" height="46" viewBox="0 0 100 100"><g transform="translate(50,50)"><g>' + petalsMarkup(12, 9, 21, -21) + '</g><circle class="core" r="15"/></g></svg>' +
+    '</div>';
   html += pend.length
-    ? '<div class="stat-value" style="font-size:19px; color:var(--critical)">' + pend.length + ' pendência' + (pend.length>1?'s':'') + '</div><div class="stat-delta">' + pend.join(' + ') + '</div>'
-    : '<div class="stat-value" style="font-size:19px; color:var(--good-text)">Tudo em dia</div><div class="stat-delta">Nenhuma pendência no momento</div>';
+    ? '<div class="hero-msg critical">' + pend.length + ' pendência' + (pend.length>1?'s':'') + '</div><div class="hero-msg-sub">' + pend.join(' + ') + '</div>'
+    : '<div class="hero-msg good">Tudo em dia</div><div class="hero-msg-sub">Nenhuma pendência no momento</div>';
   html += '</div>';
 
   if (STATE.isenta){
     html += '<div class="card"><div class="card-head"><span class="card-title">Taxa condominial</span></div><p style="font-size:13px; color:var(--ink-2)">Sua casa é isenta da taxa condominial.</p></div>';
   } else {
-    const prox = new Date(hoje.getFullYear(), hoje.getMonth()+ (hoje.getDate()>10?1:0), 10);
+    const diaVencProx = STATE.config.dia_vencimento || 15;
+    const prox = new Date(hoje.getFullYear(), hoje.getMonth()+ (hoje.getDate()>diaVencProx?1:0), diaVencProx);
     html += '<div class="grid grid-2">' +
       '<div class="card stat"><div class="stat-label">Próx. vencimento</div><div class="stat-value" style="font-size:17px">' + prox.getDate() + ' de ' + MESES_PT[prox.getMonth()].toLowerCase() + '</div><div class="stat-delta">' + brl(STATE.config.valor_taxa) + '</div></div>' +
-      '<div class="card stat"><div class="stat-label">Pontualidade</div><div class="stat-value" style="font-size:17px">' + pontualidade.pct + '%</div><div class="stat-delta">' + pontualidade.emDia + ' de ' + pontualidade.total + ' em dia</div></div>' +
+      '<div class="card stat" style="align-items:center; text-align:center"><div class="stat-label">Pontualidade</div><div class="ring-wrap">' + ringGauge(pontualidade.pct) + '<div class="ring-text">' + pontualidade.pct + '%</div></div><div class="stat-delta">' + pontualidade.emDia + ' de ' + pontualidade.total + ' em dia</div></div>' +
     '</div>';
   }
 
@@ -329,7 +391,7 @@ function calcularPontualidade(){
     if (i === 0 && !pago) continue; // mês corrente ainda não fechou, não conta contra
     total++;
     if (pago){
-      const vencimento = new Date(d.getFullYear(), d.getMonth(), 10);
+      const vencimento = new Date(d.getFullYear(), d.getMonth(), STATE.config.dia_vencimento || 15);
       const dataPag = new Date(pago.data_pagamento + 'T12:00:00');
       if (dataPag <= vencimento) emDia++;
     }
@@ -351,15 +413,16 @@ function renderTaxas(hoje){
   html += '</div>';
 
   if (!t.jaPago){
-    html += '<div class="charge-box' + (t.diasAtraso>0?'':' flat') + '">' +
+    html += '<div class="charge-box' + (t.diasComEncargo>0?'':' flat') + '">' +
       '<div class="charge-row"><span>Taxa — ' + t.label + '</span><span class="num">' + brl(t.valorTaxa) + '</span></div>' +
       '<div class="charge-row"><span>Vencimento</span><span>' + t.vencimento.toLocaleDateString('pt-BR') + '</span></div>';
-    if (t.diasAtraso > 0){
+    if (t.diasComEncargo > 0){
       html += '<div class="charge-row"><span>Multa (' + STATE.config.multa_pct + '%, única)</span><span class="num">+ ' + brl(t.multa) + '</span></div>' +
         '<div class="charge-row"><span>Juros de mora (' + STATE.config.juros_pct + '% a.m.)</span><span class="num">+ ' + brl(t.juros) + '</span></div>';
     }
     html += '<div class="charge-row total"><span>Total hoje</span><span class="num">' + brl(t.total) + '</span></div></div>';
-    if (t.diasAtraso > 0) html += '<p style="font-size:11px; color:var(--muted); margin:11px 2px 0; line-height:1.5">Multa fixa de ' + STATE.config.multa_pct + '% + juros de mora de ' + STATE.config.juros_pct + '% ao mês, proporcional aos dias corridos de atraso.</p>';
+    if (t.diasComEncargo > 0) html += '<p style="font-size:11px; color:var(--muted); margin:11px 2px 0; line-height:1.5">Multa fixa de ' + STATE.config.multa_pct + '% + juros de mora de ' + STATE.config.juros_pct + '% ao mês, a partir de ' + DIAS_CARENCIA_JUROS + ' dias após o vencimento.</p>';
+    else if (t.diasAtraso > 0) html += '<p style="font-size:11px; color:var(--muted); margin:11px 2px 0; line-height:1.5">Em atraso há ' + t.diasAtraso + ' dia' + (t.diasAtraso>1?'s':'') + ', mas ainda sem multa ou juros — eles só passam a valer ' + DIAS_CARENCIA_JUROS + ' dias após o vencimento.</p>';
 
     html += '<div class="pix-card" style="margin-top:14px"><div class="qr-box" id="qr-atual"></div><div class="pix-info">' +
       '<div class="pix-label">Pix — ' + t.label + '</div>' +
@@ -395,8 +458,18 @@ function renderTaxas(hoje){
   var wrap = document.createElement('div'); wrap.innerHTML = html;
   Array.from(wrap.childNodes).forEach(function(n){ target.appendChild(n); });
 
-  renderFakeQR(document.getElementById('qr-atual'), 1337);
-  renderFakeQR(document.getElementById('qr-antigo'), 4242);
+  if (!STATE.isenta && !t.jaPago){
+    renderPixQR(document.getElementById('qr-atual'), {
+      chave: STATE.config.pix_chave, tipo: STATE.config.pix_tipo, nome: STATE.config.pix_nome,
+      valor: t.total, txid: 'TAXA' + String(hoje.getMonth()+1).padStart(2,'0') + hoje.getFullYear() + 'C' + CASA,
+    });
+  }
+  if (STATE.debito){
+    renderPixQR(document.getElementById('qr-antigo'), {
+      chave: STATE.config.pix_chave, tipo: STATE.config.pix_tipo, nome: STATE.config.pix_nome,
+      valor: STATE.debito.valor, txid: 'DEBANTC' + CASA,
+    });
+  }
   bindCopyButtons();
 }
 
@@ -419,7 +492,7 @@ function renderResumo(hoje){
 
     let html = '<div class="card"><div class="card-head"><span class="card-title">Inadimplência do mês — ' + MESES_PT[hoje.getMonth()] + '</span></div>' +
       '<div class="stat-value" style="font-size:30px">' + pctInad.toLocaleString('pt-BR') + '%<span style="font-size:12.5px; font-weight:500; color:var(--muted)"> das casas</span></div>' +
-      '<div class="stat-delta" style="margin-bottom:12px">' + emAberto + ' de ' + cobraveis + ' casas cobráveis com a taxa do mês em aberto' + (casasIsentas.size ? ' (' + casasIsentas.size + ' isenta' + (casasIsentas.size>1?'s':'') + ' de 27 no total)' : '') + '</div>' +
+      '<div class="stat-delta" style="margin-bottom:12px">' + emAberto + ' de ' + cobraveis + ' casas com a taxa do mês em aberto</div>' +
       '<div class="propbar"><span style="width:' + (100-pctInad) + '%; background:var(--good)"></span><span style="width:' + pctInad + '%; background:var(--critical)"></span></div>' +
       '<div class="legend-row"><span class="legend-item"><span class="swatch" style="background:var(--good)"></span>Em dia — ' + casasComPagamento + '</span><span class="legend-item"><span class="swatch" style="background:var(--critical)"></span>Em aberto — ' + emAberto + '</span></div></div>';
 
@@ -432,21 +505,24 @@ function renderResumo(hoje){
       const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
       const lbl = mesRefLabel(d);
       const pago = STATE.pagamentos.find(function(p){ return p.mes_ref === lbl; });
-      let cls = 'critical', tip = 'Em aberto';
+      const venc = new Date(d.getFullYear(), d.getMonth(), STATE.config.dia_vencimento || 15);
+      let cls = 'critical', tip = 'Não pago', icone = 'x';
       if (pago){
-        const venc = new Date(d.getFullYear(), d.getMonth(), 10);
         const dataPag = new Date(pago.data_pagamento+'T12:00:00');
         cls = dataPag <= venc ? 'good' : 'critical';
         tip = 'Pago ' + dataPag.toLocaleDateString('pt-BR');
-      } else if (i===0){
-        cls = 'good'; tip = 'Ainda no prazo';
+        icone = cls === 'good' ? 'check' : 'x';
+      } else if (i===0 && hoje <= venc){
+        cls = 'pending'; tip = 'Ainda não venceu'; icone = 'dot';
       }
       pontualidade6.push('<div class="strip-cell '+cls+'"><div class="m">' + MESES_PT[d.getMonth()].slice(0,3) + '</div><div class="dot">' +
-        (cls==='good' ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M4 12l5 5L20 6"/></svg>' : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M12 8v5M12 16h.01"/></svg>') +
+        (icone==='check' ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M4 12l5 5L20 6"/></svg>'
+          : icone==='dot' ? '<svg width="8" height="8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="currentColor"/></svg>'
+          : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M12 8v5M12 16h.01"/></svg>') +
         '</div><div class="strip-tip">' + tip + '</div></div>');
     }
     html += '<div class="card"><div class="card-head"><span class="card-title">Sua pontualidade — 6 meses</span></div><div class="strip">' + pontualidade6.join('') + '</div>' +
-      '<div class="legend-row"><span class="legend-item"><span class="swatch" style="background:var(--good)"></span>Pago em dia</span><span class="legend-item"><span class="swatch" style="background:var(--critical)"></span>Não pago</span></div></div>';
+      '<div class="legend-row"><span class="legend-item"><span class="swatch" style="background:var(--good)"></span>Pago em dia</span><span class="legend-item"><span class="swatch" style="background:var(--warning)"></span>Ainda não venceu</span><span class="legend-item"><span class="swatch" style="background:var(--critical)"></span>Não pago</span></div></div>';
 
     var target = document.querySelector('[data-mview="resumo"]');
     target.querySelectorAll(':scope > *:not(.m-section-title)').forEach(function(n){ n.remove(); });
@@ -534,6 +610,8 @@ var selectedDay = null;
 var calMesAtual = new Date();
 function fmtHora(t){ if (!t) return ''; var p = t.split(':'); return p[1]==='00' ? (p[0]+'h') : (p[0]+'h'+p[1]); }
 
+var calPorDia = {};
+
 function renderCalendario(hoje){
   calMesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   document.getElementById('cal-mes-nome').textContent = MESES_PT[calMesAtual.getMonth()] + ' ' + calMesAtual.getFullYear();
@@ -543,10 +621,12 @@ function renderCalendario(hoje){
   const daysInMonth = new Date(calMesAtual.getFullYear(), calMesAtual.getMonth()+1, 0).getDate();
   const todayNum = hoje.getMonth()===calMesAtual.getMonth() && hoje.getFullYear()===calMesAtual.getFullYear() ? hoje.getDate() : -1;
 
-  const porDia = {};
+  calPorDia = {};
   STATE.reservas.forEach(function(r){
     const d = new Date(r.data + 'T12:00:00');
-    if (d.getMonth()===calMesAtual.getMonth() && d.getFullYear()===calMesAtual.getFullYear()) porDia[d.getDate()] = r;
+    if (d.getMonth()===calMesAtual.getMonth() && d.getFullYear()===calMesAtual.getFullYear()){
+      (calPorDia[d.getDate()] = calPorDia[d.getDate()] || []).push(r);
+    }
   });
 
   calGrid.innerHTML = '';
@@ -556,15 +636,15 @@ function renderCalendario(hoje){
     var cell = document.createElement('div');
     cell.className = 'day';
     cell.textContent = d;
-    var r = porDia[d];
+    var lista = calPorDia[d] || [];
     var isPast = todayNum > 0 && d < todayNum;
     if (d === todayNum) cell.classList.add('today');
-    if (r){
-      cell.classList.add('reserved');
-      cell.title = 'Casa ' + String(r.casa).padStart(2,'0') + ' · ' + fmtHora(r.hora_inicio) + ' às ' + fmtHora(r.hora_fim);
-    } else if (isPast){
+    if (lista.some(function(r){ return r.casa === CASA; })) cell.classList.add('mine');
+    else if (lista.length) cell.classList.add('reserved');
+    if (isPast){
       cell.style.opacity = '.35'; cell.style.cursor = 'not-allowed';
     } else {
+      if (lista.length) cell.title = lista.map(function(r){ return 'Casa ' + String(r.casa).padStart(2,'0') + ' · ' + fmtHora(r.hora_inicio) + ' às ' + fmtHora(r.hora_fim); }).join('\n');
       cell.classList.add('avail');
       cell.addEventListener('click', function(){
         var val = parseInt(this.textContent, 10);
@@ -572,12 +652,48 @@ function renderCalendario(hoje){
         this.classList.add('selected');
         selectedDay = val;
         document.getElementById('reserve-date').textContent = val + ' de ' + MESES_PT[calMesAtual.getMonth()].toLowerCase();
+        renderReserveDayList(calPorDia[val] || []);
         document.getElementById('reserve-panel').classList.add('on');
       });
     }
     calGrid.appendChild(cell);
   }
 }
+
+function renderReserveDayList(lista){
+  var el = document.getElementById('reserve-day-list');
+  if (!lista.length){ el.innerHTML = ''; return; }
+  el.innerHTML = '<div style="font-size:11.5px; color:var(--muted); margin:6px 0 4px">Já reservado nesse dia — escolha outro horário:</div>' +
+    lista.map(function(r){ return '<div style="font-size:12.5px; color:var(--ink-2); margin-bottom:2px">Casa ' + String(r.casa).padStart(2,'0') + ' · ' + fmtHora(r.hora_inicio) + ' às ' + fmtHora(r.hora_fim) + '</div>'; }).join('');
+}
+
+async function recarregarReservas(){
+  const { data: reservasCasa } = await supabaseClient.from('reservas').select('*').gte('data', new Date().toISOString().slice(0,8)+'01');
+  STATE.reservas = reservasCasa || [];
+  renderCalendario(new Date());
+  renderMinhasReservas();
+}
+
+function renderMinhasReservas(){
+  var el = document.getElementById('minhas-reservas-list');
+  var hojeStr = new Date().toISOString().slice(0,10);
+  var minhas = STATE.reservas.filter(function(r){ return r.casa === CASA && r.data >= hojeStr; })
+    .sort(function(a,b){ return a.data === b.data ? a.hora_inicio.localeCompare(b.hora_inicio) : a.data.localeCompare(b.data); });
+  if (!minhas.length){ el.innerHTML = '<p style="color:var(--muted); font-size:13px">Nenhuma reserva futura.</p>'; return; }
+  el.innerHTML = minhas.map(function(r){
+    var d = new Date(r.data + 'T12:00:00');
+    return '<div class="doc-row"><div style="flex:1"><div class="doc-name">' + d.getDate() + ' de ' + MESES_PT[d.getMonth()].toLowerCase() + '</div><div class="doc-meta">' + fmtHora(r.hora_inicio) + ' às ' + fmtHora(r.hora_fim) + '</div></div><button class="btn btn-ghost btn-sm" data-cancel-reserva="' + r.id + '">Cancelar</button></div>';
+  }).join('');
+}
+
+document.getElementById('minhas-reservas-list').addEventListener('click', async function(e){
+  var btn = e.target.closest('[data-cancel-reserva]'); if (!btn) return;
+  btn.disabled = true;
+  const { error } = await supabaseClient.from('reservas').delete().eq('id', btn.getAttribute('data-cancel-reserva'));
+  if (error){ showToast('Erro ao cancelar: ' + error.message, true); btn.disabled = false; return; }
+  showToast('Reserva cancelada. Escolha outro dia ou horário quando quiser.');
+  await recarregarReservas();
+});
 
 document.getElementById('confirm-reserve').addEventListener('click', async function(){
   if (!selectedDay) return;
@@ -586,6 +702,8 @@ document.getElementById('confirm-reserve').addEventListener('click', async funct
   if (!ini || !fim){ showToast('Escolha o horário de início e término.', true); return; }
   if (fim <= ini){ showToast('O término precisa ser depois do início.', true); return; }
   const dataStr = calMesAtual.getFullYear() + '-' + String(calMesAtual.getMonth()+1).padStart(2,'0') + '-' + String(selectedDay).padStart(2,'0');
+  const conflita = (calPorDia[selectedDay] || []).some(function(r){ return ini < r.hora_fim.slice(0,5) && fim > r.hora_inicio.slice(0,5); });
+  if (conflita){ showToast('Esse horário conflita com uma reserva já existente nesse dia.', true); return; }
   const btn = this; btn.disabled = true;
   const { error } = await supabaseClient.from('reservas').insert({
     casa: CASA, data: dataStr, hora_inicio: ini, hora_fim: fim,
@@ -595,10 +713,9 @@ document.getElementById('confirm-reserve').addEventListener('click', async funct
   if (error){ showToast(error.code === '23505' ? 'Esse horário já foi reservado por outra casa.' : 'Erro: ' + error.message, true); return; }
   showToast('Área de Convivência reservada para ' + selectedDay + ' de ' + MESES_PT[calMesAtual.getMonth()].toLowerCase() + ', ' + fmtHora(ini) + ' às ' + fmtHora(fim) + '!');
   document.getElementById('reserve-panel').classList.remove('on');
+  document.getElementById('reserve-day-list').innerHTML = '';
   selectedDay = null;
-  const { data: reservasCasa } = await supabaseClient.from('reservas').select('*').gte('data', new Date().toISOString().slice(0,8)+'01');
-  STATE.reservas = reservasCasa || [];
-  renderCalendario(new Date());
+  await recarregarReservas();
 });
 
 // ---------- troca de senha obrigatória (primeiro acesso / reset) ----------

@@ -29,6 +29,7 @@ alter table moradores disable row level security;
 create table if not exists config_geral (
   id integer primary key default 1 check (id = 1),
   valor_taxa numeric not null default 75,
+  dia_vencimento integer not null default 15,
   multa_pct numeric not null default 2.0,
   juros_pct numeric not null default 1.0,
   pix_tipo text default 'CNPJ',
