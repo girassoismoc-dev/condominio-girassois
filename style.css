@@ -96,6 +96,8 @@ button{font-family:inherit}
 .stat-value{font-family:var(--font-display); font-size:27px; font-weight:700}
 .stat-delta{font-size:11.5px; color:var(--ink-2)}
 .hero-card{ background: radial-gradient(320px 200px at 100% -25%, var(--accent-wash), transparent 65%), var(--surface); }
+.hero-pay-cta{ text-align:right; font-size:10.5px; font-weight:700; color:var(--accent-strong); cursor:pointer; margin-top:8px; }
+.hero-pay-cta span{ margin-left:1px; }
 .hero-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
 .hero-greet{ font-size:12.5px; color:var(--muted); font-weight:600; }
 .hero-casa{ font-size:21px; font-weight:800; color:var(--ink); margin-top:2px; font-family:var(--font-display); }
@@ -107,6 +109,12 @@ button{font-family:inherit}
 .ring-wrap{ position:relative; width:74px; height:74px; margin:2px auto 0; }
 .ring-wrap svg{ display:block; }
 .ring-text{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800; color:var(--ink); }
+.trend-bars{ display:flex; align-items:flex-end; gap:8px; }
+.trend-bar-col{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
+.trend-bar-track{ width:100%; height:70px; display:flex; align-items:flex-end; background:var(--surface-2); border-radius:6px; overflow:hidden; }
+.trend-bar{ width:100%; border-radius:6px 6px 0 0; min-height:3px; }
+.trend-bar-pct{ font-size:10.5px; color:var(--ink-2); font-weight:700; }
+.trend-bar-label{ font-size:10px; color:var(--muted); font-weight:600; text-transform:uppercase; }
 .pill{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:3px 9px 3px 7px; border-radius:99px; }
 .pill svg{width:12px;height:12px}
 .pill-good{background:color-mix(in srgb, var(--good) 16%, transparent); color:var(--good-text)}
@@ -197,10 +205,9 @@ textarea{width:100%; padding:10px 12px; border-radius:var(--radius-s); border:1p
 .pix-name{font-size:12.5px; color:var(--ink-2)}
 
 /* ============================================================ MORADOR (mobile) ============================================================ */
-#app-morador{min-height:100vh; display:flex; align-items:flex-start; justify-content:center; padding:28px 12px 60px; background:var(--page);}
-.phone-frame{ width:100%; max-width:412px; background:var(--page); border-radius:34px; box-shadow:var(--shadow), 0 0 0 9px var(--ink); overflow:hidden; display:flex; flex-direction:column; height:min(860px, 92vh); position:relative; }
-.phone-status{ display:flex; justify-content:space-between; align-items:center; padding:10px 22px 2px; font-size:12px; font-weight:600; color:var(--ink); flex-shrink:0; }
-.phone-header{ background:var(--secondary); color:var(--secondary-ink); padding:14px 18px 18px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+#app-morador{min-height:100vh; display:flex; justify-content:center; background:var(--page);}
+.phone-frame{ width:100%; max-width:412px; background:var(--page); display:flex; flex-direction:column; min-height:100vh; position:relative; }
+.phone-header{ background:var(--secondary); color:var(--secondary-ink); padding:calc(14px + env(safe-area-inset-top)) 18px 18px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .ph-id{display:flex; align-items:center; gap:10px}
 .ph-avatar{width:38px;height:38px;border-radius:50%; background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; flex-shrink:0}
 .ph-greet{font-size:11px; opacity:.7}

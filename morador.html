@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Meu painel — Parque dos Girassóis</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg transform='translate(50,50)'%3E%3Cg fill='%23F2A93C'%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(30)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(60)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(90)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(120)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(150)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(180)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(210)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(240)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(270)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(300)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(330)'/%3E%3C/g%3E%3Ccircle r='15' fill='%236B4226'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -30,13 +31,6 @@
 
 <div id="app-morador" class="hidden">
   <div class="phone-frame">
-    <div class="phone-status">
-      <span id="ph-clock">--:--</span>
-      <span style="display:flex; gap:5px; align-items:center">
-        <svg width="15" height="11" viewBox="0 0 18 12" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1 8l3-3M6 9l3-5M11 10l3-7M16 11l1-9"/></svg>
-        <svg width="17" height="10" viewBox="0 0 22 12" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1" y="1" width="18" height="10" rx="2.5"/><rect x="20" y="4" width="1.6" height="4" rx="0.8" fill="currentColor" stroke="none"/><rect x="3" y="3" width="14" height="6" rx="1.2" fill="currentColor" stroke="none"/></svg>
-      </span>
-    </div>
     <div class="phone-header">
       <div class="ph-id">
         <div class="ph-avatar"><svg width="22" height="22" viewBox="0 0 100 100"><g transform="translate(50,50) scale(0.72)"><g id="petals-phone"></g><circle class="core" r="15"/></g></svg></div>
@@ -189,12 +183,6 @@ document.querySelectorAll('.core').forEach(function(core){
   }
 });
 
-function tickClock(){
-  var d = new Date();
-  document.getElementById('ph-clock').textContent = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
-}
-tickClock(); setInterval(tickClock, 30000);
-
 var toast = document.getElementById('toast');
 function showToast(text, isErr){
   document.getElementById('toast-text').textContent = text;
@@ -319,23 +307,29 @@ var DIAS_CARENCIA_JUROS = 10;
 
 function calcularTaxaMes(hoje){
   const label = mesRefLabel(hoje);
-  const jaPago = STATE.pagamentos.some(function(p){ return p.mes_ref === label; });
+  const pagamento = STATE.pagamentos.find(function(p){ return p.mes_ref === label; });
   const valorTaxa = Number(STATE.config.valor_taxa || 75);
+  const valorPago = pagamento ? Number(pagamento.valor) : 0;
+  const parcial = !!pagamento && valorPago < valorTaxa - 0.01;
+  const jaPago = !!pagamento && !parcial;
+  const restante = parcial ? Math.round((valorTaxa - valorPago) * 100) / 100 : 0;
+  const baseCalculo = parcial ? restante : valorTaxa;
   const diaVenc = STATE.config.dia_vencimento || 15;
   const vencimento = new Date(hoje.getFullYear(), hoje.getMonth(), diaVenc);
   const diasAtraso = Math.max(0, Math.floor((hoje - vencimento) / 86400000));
   const diasComEncargo = Math.max(0, diasAtraso - DIAS_CARENCIA_JUROS);
   const multaPct = Number(STATE.config.multa_pct || 0);
   const jurosPct = Number(STATE.config.juros_pct || 0);
-  const multa = diasComEncargo > 0 ? valorTaxa * multaPct/100 : 0;
-  const juros = diasComEncargo > 0 ? valorTaxa * jurosPct/100 * (diasComEncargo/30) : 0;
-  return { label, jaPago, valorTaxa, vencimento, diasAtraso, diasComEncargo, multa, juros, total: valorTaxa + multa + juros };
+  const multa = (!jaPago && diasComEncargo > 0) ? baseCalculo * multaPct/100 : 0;
+  const juros = (!jaPago && diasComEncargo > 0) ? baseCalculo * jurosPct/100 * (diasComEncargo/30) : 0;
+  const total = (jaPago ? 0 : baseCalculo) + multa + juros;
+  return { label, jaPago, parcial, valorPago, restante, valorTaxa, vencimento, diasAtraso, diasComEncargo, multa, juros, total };
 }
 
 function renderInicio(hoje){
   const t = calcularTaxaMes(hoje);
   const pend = [];
-  if (!STATE.isenta && !t.jaPago) pend.push(t.diasAtraso > 0 ? 'Taxa de ' + t.label + ' em atraso' : 'Taxa de ' + t.label + ' a vencer');
+  if (!STATE.isenta && !t.jaPago) pend.push(t.parcial ? 'Taxa de ' + t.label + ' paga parcialmente (falta ' + brl(t.restante) + ')' : (t.diasAtraso > 0 ? 'Taxa de ' + t.label + ' em atraso' : 'Taxa de ' + t.label + ' a vencer'));
   if (STATE.debito) pend.push('Débito anterior de ' + brl(STATE.debito.valor));
 
   const pontualidade = calcularPontualidade();
@@ -347,7 +341,7 @@ function renderInicio(hoje){
     '<svg class="hero-sun" width="46" height="46" viewBox="0 0 100 100"><g transform="translate(50,50)"><g>' + petalsMarkup(12, 9, 21, -21) + '</g><circle class="core" r="15"/></g></svg>' +
     '</div>';
   html += pend.length
-    ? '<div class="hero-msg critical">' + pend.length + ' pendência' + (pend.length>1?'s':'') + '</div><div class="hero-msg-sub">' + pend.join(' + ') + '</div>'
+    ? '<div class="hero-msg critical">' + pend.length + ' pendência' + (pend.length>1?'s':'') + '</div><div class="hero-msg-sub" style="color:var(--ink)">' + pend.join(' + ') + '</div><div class="hero-pay-cta" data-mgo="taxas">Toque para pagar <span>&gt;</span></div>'
     : '<div class="hero-msg good">Tudo em dia</div><div class="hero-msg-sub">Nenhuma pendência no momento</div>';
   html += '</div>';
 
@@ -362,15 +356,12 @@ function renderInicio(hoje){
     '</div>';
   }
 
+  html += pontualidade6Card(hoje);
+
   html += '<div class="card"><div class="card-head"><span class="card-title">Avisos do condomínio</span></div><div class="timeline">';
   if (!STATE.servicos.length) html += '<div style="color:var(--muted); font-size:13px">Nenhum aviso no momento.</div>';
   STATE.servicos.slice(0,3).forEach(function(s){ html += servicoRow(s); });
   html += '</div></div>';
-
-  html += '<div class="card"><div class="card-head"><span class="card-title">Atalhos</span></div><div style="display:flex; flex-direction:column; gap:7px">' +
-    '<button class="navbtn" data-mgo="taxas" style="background:var(--surface-2); color:var(--ink)">Ver taxas e pagar via Pix</button>' +
-    '<button class="navbtn" data-mgo="reserva" style="background:var(--surface-2); color:var(--ink)">Reservar área de convivência</button>' +
-  '</div></div>';
 
   document.getElementById('inicio-status').outerHTML = html;
   document.querySelectorAll('#morador-content [data-mgo]').forEach(function(el){ el.addEventListener('click', function(){ mGoTo(el.dataset.mgo); }); });
@@ -399,6 +390,32 @@ function calcularPontualidade(){
   return { emDia: emDia, total: total, pct: total ? Math.round(emDia/total*100) : 100 };
 }
 
+function pontualidade6Card(hoje){
+  const cells = [];
+  for (let i=5;i>=0;i--){
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    const lbl = mesRefLabel(d);
+    const pago = STATE.pagamentos.find(function(p){ return p.mes_ref === lbl; });
+    const venc = new Date(d.getFullYear(), d.getMonth(), STATE.config.dia_vencimento || 15);
+    let cls = 'critical', tip = 'Não pago', icone = 'x';
+    if (pago){
+      const dataPag = new Date(pago.data_pagamento+'T12:00:00');
+      cls = dataPag <= venc ? 'good' : 'critical';
+      tip = 'Pago ' + dataPag.toLocaleDateString('pt-BR');
+      icone = cls === 'good' ? 'check' : 'x';
+    } else if (i===0 && hoje <= venc){
+      cls = 'pending'; tip = 'Ainda não venceu'; icone = 'dot';
+    }
+    cells.push('<div class="strip-cell '+cls+'"><div class="m">' + MESES_PT[d.getMonth()].slice(0,3) + '</div><div class="dot">' +
+      (icone==='check' ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M4 12l5 5L20 6"/></svg>'
+        : icone==='dot' ? '<svg width="8" height="8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="currentColor"/></svg>'
+        : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M12 8v5M12 16h.01"/></svg>') +
+      '</div><div class="strip-tip">' + tip + '</div></div>');
+  }
+  return '<div class="card"><div class="card-head"><span class="card-title">Sua pontualidade — 6 meses</span></div><div class="strip">' + cells.join('') + '</div>' +
+    '<div class="legend-row"><span class="legend-item"><span class="swatch" style="background:var(--good)"></span>Pago em dia</span><span class="legend-item"><span class="swatch" style="background:var(--warning)"></span>Ainda não venceu</span><span class="legend-item"><span class="swatch" style="background:var(--critical)"></span>Não pago</span></div></div>';
+}
+
 function renderTaxas(hoje){
   const t = calcularTaxaMes(hoje);
   let html = '';
@@ -408,14 +425,16 @@ function renderTaxas(hoje){
   } else {
   html += '<div class="card"><div class="card-head"><span class="card-title">Taxa — ' + t.label + '</span>';
   html += t.jaPago ? '<span class="pill pill-good"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg>Paga</span>'
+        : t.parcial ? '<span class="pill pill-warning">Paga parcialmente</span>'
         : t.diasAtraso > 0 ? '<span class="pill pill-critical"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 8v5M12 16h.01"/></svg>' + t.diasAtraso + ' dias em atraso</span>'
         : '<span class="pill pill-warning">A vencer</span>';
   html += '</div>';
 
   if (!t.jaPago){
     html += '<div class="charge-box' + (t.diasComEncargo>0?'':' flat') + '">' +
-      '<div class="charge-row"><span>Taxa — ' + t.label + '</span><span class="num">' + brl(t.valorTaxa) + '</span></div>' +
-      '<div class="charge-row"><span>Vencimento</span><span>' + t.vencimento.toLocaleDateString('pt-BR') + '</span></div>';
+      '<div class="charge-row"><span>Taxa — ' + t.label + '</span><span class="num">' + brl(t.valorTaxa) + '</span></div>';
+    if (t.parcial) html += '<div class="charge-row"><span>Já pago</span><span class="num" style="color:var(--good-text)">− ' + brl(t.valorPago) + '</span></div>';
+    html += '<div class="charge-row"><span>Vencimento</span><span>' + t.vencimento.toLocaleDateString('pt-BR') + '</span></div>';
     if (t.diasComEncargo > 0){
       html += '<div class="charge-row"><span>Multa (' + STATE.config.multa_pct + '%, única)</span><span class="num">+ ' + brl(t.multa) + '</span></div>' +
         '<div class="charge-row"><span>Juros de mora (' + STATE.config.juros_pct + '% a.m.)</span><span class="num">+ ' + brl(t.juros) + '</span></div>';
@@ -448,8 +467,8 @@ function renderTaxas(hoje){
   html += '<div class="card"><div class="card-head"><span class="card-title">Histórico</span></div><table><thead><tr><th>Ref.</th><th>Pag.</th><th class="right">Situação</th></tr></thead><tbody>';
   if (!STATE.pagamentos.length) html += '<tr><td colspan="3" style="color:var(--muted)">Nenhum pagamento registrado ainda.</td></tr>';
   STATE.pagamentos.forEach(function(p){
-    const venc = new Date(p.data_pagamento);
-    html += '<tr><td>' + p.mes_ref + '</td><td>' + new Date(p.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR') + '</td><td class="right">' + pillGood() + '</td></tr>';
+    const parcial = Number(p.valor) < Number(STATE.config.valor_taxa || 75) - 0.01;
+    html += '<tr><td>' + p.mes_ref + '</td><td>' + new Date(p.data_pagamento+'T12:00:00').toLocaleDateString('pt-BR') + '</td><td class="right">' + (parcial ? '<span class="pill pill-warning">Parcial · ' + brl(p.valor) + '</span>' : pillGood()) + '</td></tr>';
   });
   html += '</tbody></table></div>';
 
@@ -494,35 +513,25 @@ function renderResumo(hoje){
       '<div class="stat-value" style="font-size:30px">' + pctInad.toLocaleString('pt-BR') + '%<span style="font-size:12.5px; font-weight:500; color:var(--muted)"> das casas</span></div>' +
       '<div class="stat-delta" style="margin-bottom:12px">' + emAberto + ' de ' + cobraveis + ' casas com a taxa do mês em aberto</div>' +
       '<div class="propbar"><span style="width:' + (100-pctInad) + '%; background:var(--good)"></span><span style="width:' + pctInad + '%; background:var(--critical)"></span></div>' +
-      '<div class="legend-row"><span class="legend-item"><span class="swatch" style="background:var(--good)"></span>Em dia — ' + casasComPagamento + '</span><span class="legend-item"><span class="swatch" style="background:var(--critical)"></span>Em aberto — ' + emAberto + '</span></div></div>';
+      '<div class="legend-row"><span class="legend-item"><span class="swatch" style="background:var(--good)"></span>Pago — ' + casasComPagamento + '</span><span class="legend-item"><span class="swatch" style="background:var(--critical)"></span>Em aberto — ' + emAberto + '</span></div></div>';
 
     html += '<div class="card"><div class="card-head"><span class="card-title">Inadimplência antigas</span><span class="card-sub">Débitos anteriores</span></div>' +
       '<div class="stat-value" style="font-size:26px; color:var(--critical)">' + (debitosTodos||[]).length + ' casa' + ((debitosTodos||[]).length===1?'':'s') + '</div>' +
       '<div class="stat-delta">Somando ' + brl(totalDebitosAntigos) + ' em débitos de meses anteriores, valor fixo sem juros.</div></div>';
 
-    const pontualidade6 = [];
+    const { data: pagamentosTodos } = await supabaseClient.from('pagamentos').select('casa,mes_ref');
+    const trendBars = [];
     for (let i=5;i>=0;i--){
       const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
       const lbl = mesRefLabel(d);
-      const pago = STATE.pagamentos.find(function(p){ return p.mes_ref === lbl; });
-      const venc = new Date(d.getFullYear(), d.getMonth(), STATE.config.dia_vencimento || 15);
-      let cls = 'critical', tip = 'Não pago', icone = 'x';
-      if (pago){
-        const dataPag = new Date(pago.data_pagamento+'T12:00:00');
-        cls = dataPag <= venc ? 'good' : 'critical';
-        tip = 'Pago ' + dataPag.toLocaleDateString('pt-BR');
-        icone = cls === 'good' ? 'check' : 'x';
-      } else if (i===0 && hoje <= venc){
-        cls = 'pending'; tip = 'Ainda não venceu'; icone = 'dot';
-      }
-      pontualidade6.push('<div class="strip-cell '+cls+'"><div class="m">' + MESES_PT[d.getMonth()].slice(0,3) + '</div><div class="dot">' +
-        (icone==='check' ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M4 12l5 5L20 6"/></svg>'
-          : icone==='dot' ? '<svg width="8" height="8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="currentColor"/></svg>'
-          : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M12 8v5M12 16h.01"/></svg>') +
-        '</div><div class="strip-tip">' + tip + '</div></div>');
+      const pagosNoMes = new Set((pagamentosTodos||[]).filter(function(p){ return p.mes_ref === lbl; }).map(function(p){ return p.casa; }));
+      let abertoNoMes = 0;
+      for (let c=1;c<=27;c++){ if (!casasIsentas.has(c) && !pagosNoMes.has(c)) abertoNoMes++; }
+      const pctMes = cobraveis ? Math.round(abertoNoMes/cobraveis*100) : 0;
+      const cor = pctMes <= 20 ? 'var(--good)' : pctMes <= 50 ? 'var(--warning)' : 'var(--critical)';
+      trendBars.push('<div class="trend-bar-col"><div class="trend-bar-track"><div class="trend-bar" style="height:' + Math.max(4,pctMes) + '%; background:' + cor + '"></div></div><div class="trend-bar-pct">' + pctMes + '%</div><div class="trend-bar-label">' + MESES_PT[d.getMonth()].slice(0,3) + '</div></div>');
     }
-    html += '<div class="card"><div class="card-head"><span class="card-title">Sua pontualidade — 6 meses</span></div><div class="strip">' + pontualidade6.join('') + '</div>' +
-      '<div class="legend-row"><span class="legend-item"><span class="swatch" style="background:var(--good)"></span>Pago em dia</span><span class="legend-item"><span class="swatch" style="background:var(--warning)"></span>Ainda não venceu</span><span class="legend-item"><span class="swatch" style="background:var(--critical)"></span>Não pago</span></div></div>';
+    html += '<div class="card"><div class="card-head"><span class="card-title">Inadimplência — últimos 6 meses</span><span class="card-sub">Todas as casas</span></div><div class="trend-bars">' + trendBars.join('') + '</div></div>';
 
     var target = document.querySelector('[data-mview="resumo"]');
     target.querySelectorAll(':scope > *:not(.m-section-title)').forEach(function(n){ n.remove(); });
