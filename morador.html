@@ -161,17 +161,6 @@ function petalsMarkup(n, rx, ry, cy){
   for (var i=0;i<n;i++){ var deg = (360/n)*i; s += '<ellipse class="petal" cx="0" cy="'+cy+'" rx="'+rx+'" ry="'+ry+'" transform="rotate('+deg+')"/>'; }
   return s;
 }
-function ringGauge(pct, size, stroke){
-  size = size || 74; stroke = stroke || 7;
-  var r = (size - stroke) / 2, c = 2 * Math.PI * r;
-  var p = Math.max(0, Math.min(100, pct));
-  var off = c * (1 - p/100);
-  var color = p >= 80 ? 'var(--good)' : p >= 50 ? 'var(--warning)' : 'var(--critical)';
-  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" style="transform:rotate(-90deg)">' +
-    '<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="var(--border)" stroke-width="'+stroke+'"/>' +
-    '<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="'+stroke+'" stroke-linecap="round" stroke-dasharray="'+c+'" stroke-dashoffset="'+off+'"/>' +
-    '</svg>';
-}
 document.getElementById('petals-phone').innerHTML = petalsMarkup(12, 9, 21, -21);
 document.getElementById('petals-troca').innerHTML = petalsMarkup(12, 9, 21, -21);
 document.querySelectorAll('.core').forEach(function(core){
@@ -334,7 +323,6 @@ function renderInicio(hoje){
   if (!STATE.isenta && !t.jaPago) pend.push(t.parcial ? 'Taxa de ' + t.label + ' paga parcialmente (falta ' + brl(t.restante) + ')' : (t.diasAtraso > 0 ? 'Taxa de ' + t.label + ' em atraso' : 'Taxa de ' + t.label + ' a vencer'));
   if (STATE.debito) pend.push('Débito anterior de ' + brl(STATE.debito.valor));
 
-  const pontualidade = calcularPontualidade();
   const primeiroNome = (STATE.morador && STATE.morador.nome) ? STATE.morador.nome.split(' ')[0] : '';
 
   let html = '<div class="card hero-card"><div class="hero-top"><div>' +
@@ -352,10 +340,7 @@ function renderInicio(hoje){
   } else {
     const diaVencProx = STATE.config.dia_vencimento || 15;
     const prox = new Date(hoje.getFullYear(), hoje.getMonth()+ (hoje.getDate()>diaVencProx?1:0), diaVencProx);
-    html += '<div class="grid grid-2">' +
-      '<div class="card stat"><div class="stat-label">Próx. vencimento</div><div class="stat-value" style="font-size:17px">' + prox.getDate() + ' de ' + MESES_PT[prox.getMonth()].toLowerCase() + '</div><div class="stat-delta">' + brl(STATE.config.valor_taxa) + '</div></div>' +
-      '<div class="card stat" style="align-items:center; text-align:center"><div class="stat-label">Pontualidade</div><div class="ring-wrap">' + ringGauge(pontualidade.pct) + '<div class="ring-text">' + pontualidade.pct + '%</div></div><div class="stat-delta">' + pontualidade.emDia + ' de ' + pontualidade.total + ' em dia</div></div>' +
-    '</div>';
+    html += '<div class="card stat"><div class="stat-label">Próx. vencimento</div><div class="stat-value" style="font-size:17px">' + prox.getDate() + ' de ' + MESES_PT[prox.getMonth()].toLowerCase() + '</div><div class="stat-delta">' + brl(STATE.config.valor_taxa) + '</div></div>';
   }
 
   html += pontualidade6Card(hoje);
@@ -373,25 +358,6 @@ function servicoRow(sv){
   return '<div class="tl-item '+sv.status+'"><span class="tl-dot"></span><div class="tl-title">'+sv.titulo+'</div><div class="tl-meta">'+sv.meta+'</div>'+(sv.descricao ? '<div class="tl-desc">'+sv.descricao+'</div>' : '')+'</div>';
 }
 
-function calcularPontualidade(){
-  // últimos 6 meses corridos, incluindo o atual
-  const hoje = new Date();
-  let emDia = 0, total = 0;
-  for (let i=5;i>=0;i--){
-    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
-    const label = mesRefLabel(d);
-    const pago = STATE.pagamentos.find(function(p){ return p.mes_ref === label; });
-    if (i === 0 && !pago) continue; // mês corrente ainda não fechou, não conta contra
-    total++;
-    if (pago){
-      const vencimento = new Date(d.getFullYear(), d.getMonth(), STATE.config.dia_vencimento || 15);
-      const dataPag = new Date(pago.data_pagamento + 'T12:00:00');
-      if (dataPag <= vencimento) emDia++;
-    }
-  }
-  return { emDia: emDia, total: total, pct: total ? Math.round(emDia/total*100) : 100 };
-}
-
 function pontualidade6Card(hoje){
   const cells = [];
   for (let i=5;i>=0;i--){
@@ -403,15 +369,15 @@ function pontualidade6Card(hoje){
     if (pago){
       const dataPag = new Date(pago.data_pagamento+'T12:00:00');
       cls = dataPag <= venc ? 'good' : 'critical';
-      tip = 'Pago ' + dataPag.toLocaleDateString('pt-BR');
+      tip = 'Pago ' + dataPag.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
       icone = cls === 'good' ? 'check' : 'x';
     } else if (i===0 && hoje <= venc){
       cls = 'pending'; tip = 'Ainda não venceu'; icone = 'dot';
     }
     cells.push('<div class="strip-cell '+cls+'"><div class="m">' + MESES_PT[d.getMonth()].slice(0,3) + '</div><div class="dot">' +
-      (icone==='check' ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M4 12l5 5L20 6"/></svg>'
-        : icone==='dot' ? '<svg width="8" height="8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="currentColor"/></svg>'
-        : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M12 8v5M12 16h.01"/></svg>') +
+      (icone==='check' ? '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2"><path d="M4 12l5 5L20 6"/></svg>'
+        : icone==='dot' ? '<svg width="11" height="11" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="currentColor"/></svg>'
+        : '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M12 8v5M12 16h.01"/></svg>') +
       '</div><div class="strip-tip">' + tip + '</div></div>');
   }
   return '<div class="card"><div class="card-head"><span class="card-title">Sua pontualidade — 6 meses</span></div><div class="strip">' + cells.join('') + '</div>' +
