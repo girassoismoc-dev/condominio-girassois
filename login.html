@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parque dos Girassóis — Portal do Condomínio</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="sunPetal" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFCF57"/><stop offset="100%" stop-color="#EE8B12"/></linearGradient></defs></svg>
+
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-brand">
+      <svg class="sun-mark" width="46" height="46" viewBox="0 0 100 100"><g transform="translate(50,50)"><g id="petals-login"></g><circle class="core" r="15"/></g></svg>
+      <h1>Parque dos Girassóis</h1>
+      <div class="loc">Montes Claros · MG</div>
+    </div>
+
+    <div class="role-toggle" id="role-toggle">
+      <button type="button" class="role-btn active" data-role="morador">Sou morador</button>
+      <button type="button" class="role-btn" data-role="sindico">Síndico / Subsíndico</button>
+    </div>
+
+    <form id="login-form">
+      <div class="field" id="field-casa">
+        <label for="casa">Casa</label>
+        <select id="casa"></select>
+      </div>
+      <div class="field hidden" id="field-usuario">
+        <label for="usuario">E-mail</label>
+        <input id="usuario" type="email" placeholder="sindico@parquedosgirassois.com.br" autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="senha">Senha</label>
+        <input id="senha" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary" id="btn-entrar">Entrar</button>
+    </form>
+    <p class="login-error" id="login-error"></p>
+    <p class="login-hint" id="login-hint">Moradores usam a versão mobile; síndico e subsíndico usam o painel de computador.</p>
+    <div class="login-foot">PARQUE DOS GIRASSÓIS · PORTAL DO CONDOMÍNIO</div>
+  </div>
+</div>
+
+<script src="supabase-config.js"></script>
+<script>
+function petalsMarkup(n, rx, ry, cy){
+  var s = '';
+  for (var i=0;i<n;i++){ var deg = (360/n)*i; s += '<ellipse class="petal" cx="0" cy="'+cy+'" rx="'+rx+'" ry="'+ry+'" transform="rotate('+deg+')"/>'; }
+  return s;
+}
+document.getElementById('petals-login').innerHTML = petalsMarkup(12, 9, 21, -21);
+document.querySelectorAll('.core').forEach(function(core){
+  var g = core.parentNode;
+  for (var i=0;i<10;i++){
+    var a = Math.random()*Math.PI*2, r = Math.random()*10;
+    var dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    dot.setAttribute('class','seed'); dot.setAttribute('cx', Math.cos(a)*r); dot.setAttribute('cy', Math.sin(a)*r); dot.setAttribute('r', 1.1);
+    g.appendChild(dot);
+  }
+});
+
+var role = 'morador';
+document.querySelectorAll('.role-btn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.role-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    role = btn.dataset.role;
+    var isSindico = role === 'sindico';
+    document.getElementById('field-casa').classList.toggle('hidden', isSindico);
+    document.getElementById('field-usuario').classList.toggle('hidden', !isSindico);
+    document.getElementById('login-hint').textContent = isSindico
+      ? 'Acesso do síndico e subsíndico — painel de computador.'
+      : 'Acesso do morador — selecione sua casa e informe a senha cadastrada.';
+    document.getElementById('login-error').classList.remove('on');
+  });
+});
+
+// popula o select de casas 01-27
+var selCasa = document.getElementById('casa');
+for (var i=1;i<=27;i++){
+  var opt = document.createElement('option');
+  opt.value = i; opt.textContent = 'Casa ' + String(i).padStart(2,'0');
+  selCasa.appendChild(opt);
+}
+
+function showError(msg){
+  var el = document.getElementById('login-error');
+  el.textContent = msg;
+  el.classList.add('on');
+}
+
+document.getElementById('login-form').addEventListener('submit', async function(e){
+  e.preventDefault();
+  document.getElementById('login-error').classList.remove('on');
+  var btn = document.getElementById('btn-entrar');
+  btn.disabled = true; btn.textContent = 'Entrando...';
+
+  var senha = document.getElementById('senha').value;
+
+  try {
+    if (role === 'sindico'){
+      var email = document.getElementById('usuario').value.trim();
+      if (!email || !senha){ showError('Preencha e-mail e senha.'); return; }
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email, password: senha });
+      if (error){ showError('E-mail ou senha inválidos.'); return; }
+      location.href = 'sindico.html';
+    } else {
+      var casa = parseInt(selCasa.value, 10);
+      if (!senha){ showError('Informe a senha da casa.'); return; }
+      const { data, error } = await supabaseClient.from('moradores').select('casa,nome,senha').eq('casa', casa).maybeSingle();
+      if (error){ showError('Erro ao consultar: ' + error.message); return; }
+      if (!data){ showError('Essa casa ainda não tem morador cadastrado. Fale com o síndico.'); return; }
+      if (String(data.senha) !== senha){ showError('Senha incorreta.'); return; }
+      sessionStorage.setItem('casaLogada', String(casa));
+      sessionStorage.setItem('nomeMorador', data.nome);
+      location.href = 'morador.html';
+    }
+  } catch (err) {
+    showError('Falha de conexão: ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+});
+</script>
+</body>
+</html>
