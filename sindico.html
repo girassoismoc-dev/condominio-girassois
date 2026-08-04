@@ -27,6 +27,7 @@
       <button class="sindico-nav-btn" data-view="cobertura"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12 12 4l9 8M5 11v9h14v-9"/></svg>Cobertura</button>
       <button class="sindico-nav-btn" data-view="servicos"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14.7 6.3a3 3 0 0 0-4.1 3.9L4 17v3h3l6.8-6.8a3 3 0 0 0 3.9-4.1l-2.6 2.6-2-2z"/></svg>Serviços</button>
       <button class="sindico-nav-btn" data-view="reserva"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="4.5" width="17" height="16" rx="2.2"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/></svg>Reserva</button>
+      <button class="sindico-nav-btn" data-view="solicitacoes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 4h16v12H8l-4 4z"/><path d="M8 9h8M8 13h5"/></svg>Solicitações<span id="sol-badge" class="hidden" style="margin-left:auto; background:var(--critical); color:#fff; font-size:10px; font-weight:700; border-radius:99px; padding:1px 6px"></span></button>
       <button class="sindico-nav-btn" data-view="contas"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4.5" y="3.5" width="15" height="17" rx="2"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4"/></svg>Prestação de contas</button>
       <button class="sindico-nav-btn" data-view="config"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.9 7.9 0 0 0 0-2l2-1.5-2-3.4-2.3.9a7.7 7.7 0 0 0-1.7-1L15 3.5h-4l-.4 2.4a7.7 7.7 0 0 0-1.7 1l-2.3-.9-2 3.4L6.6 11a7.9 7.9 0 0 0 0 2l-2 1.5 2 3.4 2.3-.9c.5.4 1.1.8 1.7 1l.4 2.4h4l.4-2.4c.6-.2 1.2-.6 1.7-1l2.3.9 2-3.4z"/></svg>Configurações</button>
     </nav>
@@ -172,6 +173,14 @@
       <div class="card">
         <div class="card-head"><span class="card-title">Reservas — Área de Convivência</span></div>
         <table><thead><tr><th>Data</th><th>Horário</th><th>Casa</th><th></th></tr></thead><tbody id="sind-reservas-tbody"></tbody></table>
+      </div>
+    </section>
+
+    <!-- SOLICITAÇÕES -->
+    <section class="view" data-view="solicitacoes">
+      <div class="card">
+        <div class="card-head"><span class="card-title">Solicitações dos moradores</span><span class="card-sub">Problemas, sugestões e pedidos de nova senha</span></div>
+        <table><thead><tr><th>Casa</th><th>Tipo</th><th>Mensagem</th><th>Foto</th><th>Data</th><th>Status</th><th></th></tr></thead><tbody id="sind-solicitacoes-tbody"></tbody></table>
       </div>
     </section>
 
@@ -362,7 +371,7 @@ document.getElementById('logout-btn-sindico').addEventListener('click', async fu
 });
 
 // ---------- nav ----------
-var titlesSindico = { visao:'Visão geral', casas:'Casas', moradores:'Moradores', documentos:'Documentos', cobertura:'Cobertura', servicos:'Serviços', reserva:'Reserva', contas:'Prestação de contas', config:'Configurações' };
+var titlesSindico = { visao:'Visão geral', casas:'Casas', moradores:'Moradores', documentos:'Documentos', cobertura:'Cobertura', servicos:'Serviços', reserva:'Reserva', contas:'Prestação de contas', solicitacoes:'Solicitações', config:'Configurações' };
 document.querySelectorAll('#app-sindico [data-view]').forEach(function(el){
   el.addEventListener('click', function(){
     var view = el.dataset.view;
@@ -438,6 +447,7 @@ async function iniciar(){
     renderCobertura(),
     renderReservas(),
     renderContas(),
+    renderSolicitacoes(),
   ]);
 
   document.getElementById('contas-mes').addEventListener('change', renderContas);
@@ -714,6 +724,35 @@ document.getElementById('sind-reservas-tbody').addEventListener('click', async f
   var btn = e.target.closest('[data-del-reserva]'); if (!btn) return;
   await supabaseClient.from('reservas').delete().eq('id', btn.getAttribute('data-del-reserva'));
   showToast('Reserva cancelada.'); renderReservas();
+});
+
+var TIPOS_SOLICITACAO = { problema:'Problema', sugestao:'Sugestão', senha:'Senha' };
+async function renderSolicitacoes(){
+  const { data } = await supabaseClient.from('solicitacoes').select('*').order('criado_em', {ascending:false});
+  const lista = data || [];
+  document.getElementById('sind-solicitacoes-tbody').innerHTML = lista.length ? lista.map(function(s){
+    const resolvida = s.status === 'resolvida';
+    return '<tr' + (resolvida ? '' : ' style="font-weight:600"') + '>' +
+      '<td>Casa ' + String(s.casa).padStart(2,'0') + '</td>' +
+      '<td>' + (TIPOS_SOLICITACAO[s.tipo] || s.tipo) + '</td>' +
+      '<td style="max-width:280px; white-space:normal">' + (s.mensagem || '—') + '</td>' +
+      '<td>' + (s.foto_url ? '<a href="'+s.foto_url+'" target="_blank" rel="noopener">Ver foto</a>' : '—') + '</td>' +
+      '<td>' + new Date(s.criado_em).toLocaleDateString('pt-BR') + '</td>' +
+      '<td>' + (resolvida ? pillGood() : '<span class="pill pill-warning">Em aberto</span>') + '</td>' +
+      '<td class="right"><button class="btn btn-ghost btn-sm" data-toggle-solicitacao="'+s.id+'" data-status="'+s.status+'">' + (resolvida ? 'Reabrir' : 'Marcar resolvida') + '</button></td>' +
+      '</tr>';
+  }).join('') : '<tr><td colspan="7" style="color:var(--muted)">Nenhuma solicitação recebida ainda.</td></tr>';
+
+  const abertas = lista.filter(function(s){ return s.status !== 'resolvida'; }).length;
+  const badge = document.getElementById('sol-badge');
+  badge.textContent = abertas;
+  badge.classList.toggle('hidden', abertas === 0);
+}
+document.getElementById('sind-solicitacoes-tbody').addEventListener('click', async function(e){
+  var btn = e.target.closest('[data-toggle-solicitacao]'); if (!btn) return;
+  var novoStatus = btn.getAttribute('data-status') === 'resolvida' ? 'aberta' : 'resolvida';
+  await supabaseClient.from('solicitacoes').update({ status: novoStatus }).eq('id', btn.getAttribute('data-toggle-solicitacao'));
+  renderSolicitacoes();
 });
 
 async function renderContas(){

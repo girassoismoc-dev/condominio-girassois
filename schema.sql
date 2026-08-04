@@ -142,6 +142,19 @@ create table if not exists fotos_cobertura (
 );
 alter table fotos_cobertura disable row level security;
 
+-- Solicitações do morador: problema (com foto opcional), sugestão, ou pedido
+-- de redefinição de senha (criado pelo botão "Esqueci minha senha" do login).
+create table if not exists solicitacoes (
+  id uuid primary key default gen_random_uuid(),
+  casa integer not null references casas(numero),
+  tipo text not null check (tipo in ('problema','sugestao','senha')),
+  mensagem text,
+  foto_url text,
+  status text not null default 'aberta' check (status in ('aberta','resolvida')),
+  criado_em timestamptz not null default now()
+);
+alter table solicitacoes disable row level security;
+
 -- ============================================================
 -- Storage — bucket público único pra regimento, atas, prestação de
 -- contas (PDFs) e fotos de cobertura. Sem policy restritiva, pra

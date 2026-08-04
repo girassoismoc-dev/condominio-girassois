@@ -40,7 +40,9 @@
       </div>
       <button type="submit" class="btn btn-primary" id="btn-entrar">Entrar</button>
     </form>
+    <p class="esqueci-senha" id="esqueci-senha-btn">Esqueci minha senha</p>
     <p class="login-error" id="login-error"></p>
+    <p class="login-ok" id="login-ok"></p>
     <p class="login-hint" id="login-hint">Moradores usam a versão mobile; síndico e subsíndico usam o painel de computador.</p>
     <div class="login-foot">PARQUE DOS GIRASSÓIS · PORTAL DO CONDOMÍNIO</div>
   </div>
@@ -77,6 +79,8 @@ document.querySelectorAll('.role-btn').forEach(function(btn){
       ? 'Acesso do síndico e subsíndico — painel de computador.'
       : 'Acesso do morador — selecione sua casa e informe a senha cadastrada.';
     document.getElementById('login-error').classList.remove('on');
+    document.getElementById('login-ok').classList.remove('on');
+    document.getElementById('esqueci-senha-btn').classList.toggle('hidden', isSindico);
   });
 });
 
@@ -89,10 +93,32 @@ for (var i=1;i<=27;i++){
 }
 
 function showError(msg){
+  document.getElementById('login-ok').classList.remove('on');
   var el = document.getElementById('login-error');
   el.textContent = msg;
   el.classList.add('on');
 }
+function showOk(msg){
+  document.getElementById('login-error').classList.remove('on');
+  var el = document.getElementById('login-ok');
+  el.textContent = msg;
+  el.classList.add('on');
+}
+
+document.getElementById('esqueci-senha-btn').addEventListener('click', async function(){
+  var casa = parseInt(selCasa.value, 10);
+  var btn = this;
+  btn.style.pointerEvents = 'none'; btn.style.opacity = '.6';
+  try {
+    const { error } = await supabaseClient.from('solicitacoes').insert({ casa: casa, tipo: 'senha', mensagem: 'Morador da Casa ' + String(casa).padStart(2,'0') + ' esqueceu a senha e pediu redefinição.' });
+    if (error) throw error;
+    showOk('Pedido enviado! O síndico vai definir uma nova senha e te avisar.');
+  } catch (err) {
+    showError('Erro ao enviar pedido: ' + err.message);
+  } finally {
+    btn.style.pointerEvents = ''; btn.style.opacity = '';
+  }
+});
 
 document.getElementById('login-form').addEventListener('submit', async function(e){
   e.preventDefault();
