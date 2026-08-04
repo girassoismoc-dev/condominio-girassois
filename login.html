@@ -86,6 +86,9 @@ document.querySelectorAll('.role-btn').forEach(function(btn){
 
 // popula o select de casas 01-27
 var selCasa = document.getElementById('casa');
+var optPlaceholder = document.createElement('option');
+optPlaceholder.value = ''; optPlaceholder.textContent = 'Selecione'; optPlaceholder.disabled = true; optPlaceholder.selected = true;
+selCasa.appendChild(optPlaceholder);
 for (var i=1;i<=27;i++){
   var opt = document.createElement('option');
   opt.value = i; opt.textContent = 'Casa ' + String(i).padStart(2,'0');
@@ -107,6 +110,7 @@ function showOk(msg){
 
 document.getElementById('esqueci-senha-btn').addEventListener('click', async function(){
   var casa = parseInt(selCasa.value, 10);
+  if (!casa){ showError('Selecione sua casa primeiro.'); return; }
   var btn = this;
   btn.style.pointerEvents = 'none'; btn.style.opacity = '.6';
   try {
@@ -137,6 +141,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
       location.href = 'sindico.html';
     } else {
       var casa = parseInt(selCasa.value, 10);
+      if (!casa){ showError('Selecione sua casa.'); return; }
       if (!senha){ showError('Informe a senha da casa.'); return; }
       const { data, error } = await supabaseClient.from('moradores').select('casa,nome,senha,precisa_trocar_senha').eq('casa', casa).maybeSingle();
       if (error){ showError('Erro ao consultar: ' + error.message); return; }
