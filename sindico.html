@@ -897,6 +897,7 @@ document.getElementById('btn-lancar-pagamento').addEventListener('click', async 
   if (debito && (debito.meses_cobertos||[]).includes(mes)){
     const restante = Math.round((Number(debito.valor) - valor) * 100) / 100;
     const mesRecebido = mesRefLabel(new Date(data+'T12:00:00'));
+    await supabaseClient.from('pagamentos').insert({ casa:casa, mes_ref:mes, valor:valor, data_pagamento:data });
     if (restante <= 0.01){
       await supabaseClient.from('debitos_antigos').delete().eq('casa', casa);
     } else {
@@ -906,7 +907,7 @@ document.getElementById('btn-lancar-pagamento').addEventListener('click', async 
     btn.disabled = false;
     document.getElementById('pg-valor').value = '';
     showToast(restante <= 0.01 ? 'Débito antigo da Casa ' + String(casa).padStart(2,'0') + ' quitado!' : brl(valor) + ' abatido do débito antigo da Casa ' + String(casa).padStart(2,'0') + '. Restam ' + brl(restante) + '.');
-    renderDebitosTable(); renderCasasTable(); renderVisaoGeral(); renderContas();
+    renderPagamentosTable(); renderDebitosTable(); renderCasasTable(); renderVisaoGeral(); renderContas();
     return;
   }
 
