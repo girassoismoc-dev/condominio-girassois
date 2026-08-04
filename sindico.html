@@ -639,7 +639,7 @@ function renderMoradoresTable(lista){
   }).join('') : '<tr><td colspan="5" style="color:var(--muted)">Nenhum morador cadastrado ainda.</td></tr>';
 }
 async function renderUltimosAcessos(){
-  const { data } = await supabaseClient.from('moradores').select('casa,nome,ultimo_acesso').order('ultimo_acesso', { ascending:false, nullsFirst:false });
+  const { data } = await supabaseClient.from('moradores').select('casa,nome,ultimo_acesso').order('casa', { ascending:true });
   const lista = data || [];
   document.getElementById('acessos-tbody').innerHTML = lista.length ? lista.map(function(m){
     return '<tr><td>Casa ' + String(m.casa).padStart(2,'0') + '</td><td>' + m.nome + '</td><td' + (m.ultimo_acesso ? '' : ' style="color:var(--muted)"') + '>' + (m.ultimo_acesso ? new Date(m.ultimo_acesso).toLocaleString('pt-BR') : 'Nunca acessou') + '</td></tr>';
