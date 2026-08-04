@@ -151,6 +151,8 @@ create table if not exists solicitacoes (
   mensagem text,
   foto_url text,
   status text not null default 'aberta' check (status in ('aberta','resolvida')),
+  resposta text,
+  respondido_em timestamptz,
   criado_em timestamptz not null default now()
 );
 alter table solicitacoes disable row level security;

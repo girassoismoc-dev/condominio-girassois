@@ -180,7 +180,7 @@
     <section class="view" data-view="solicitacoes">
       <div class="card">
         <div class="card-head"><span class="card-title">Solicitações dos moradores</span><span class="card-sub">Problemas, sugestões e pedidos de nova senha</span></div>
-        <table><thead><tr><th>Casa</th><th>Tipo</th><th>Mensagem</th><th>Foto</th><th>Data</th><th>Status</th><th></th></tr></thead><tbody id="sind-solicitacoes-tbody"></tbody></table>
+        <table><thead><tr><th>Casa</th><th>Tipo</th><th>Mensagem</th><th>Foto</th><th>Data</th><th>Status</th><th></th><th style="min-width:220px">Resposta</th></tr></thead><tbody id="sind-solicitacoes-tbody"></tbody></table>
       </div>
     </section>
 
@@ -740,8 +740,13 @@ async function renderSolicitacoes(){
       '<td>' + new Date(s.criado_em).toLocaleDateString('pt-BR') + '</td>' +
       '<td>' + (resolvida ? pillGood() : '<span class="pill pill-warning">Em aberto</span>') + '</td>' +
       '<td class="right"><button class="btn btn-ghost btn-sm" data-toggle-solicitacao="'+s.id+'" data-status="'+s.status+'">' + (resolvida ? 'Reabrir' : 'Marcar resolvida') + '</button></td>' +
+      '<td>' +
+        (s.resposta ? '<div style="font-size:11.5px; color:var(--muted); margin-bottom:4px">Respondido em ' + new Date(s.respondido_em).toLocaleDateString('pt-BR') + '</div>' : '') +
+        '<textarea data-resposta-input="'+s.id+'" rows="2" style="margin:0; font-size:12px; min-width:200px" placeholder="Escrever resposta...">' + (s.resposta||'') + '</textarea>' +
+        '<button class="btn btn-ghost btn-sm" style="width:auto; margin-top:4px" data-enviar-resposta="'+s.id+'">' + (s.resposta ? 'Atualizar resposta' : 'Enviar resposta') + '</button>' +
+      '</td>' +
       '</tr>';
-  }).join('') : '<tr><td colspan="7" style="color:var(--muted)">Nenhuma solicitação recebida ainda.</td></tr>';
+  }).join('') : '<tr><td colspan="8" style="color:var(--muted)">Nenhuma solicitação recebida ainda.</td></tr>';
 
   const abertas = lista.filter(function(s){ return s.status !== 'resolvida'; }).length;
   const badge = document.getElementById('sol-badge');
@@ -749,6 +754,20 @@ async function renderSolicitacoes(){
   badge.classList.toggle('hidden', abertas === 0);
 }
 document.getElementById('sind-solicitacoes-tbody').addEventListener('click', async function(e){
+  var respBtn = e.target.closest('[data-enviar-resposta]');
+  if (respBtn){
+    var id = respBtn.getAttribute('data-enviar-resposta');
+    var textarea = document.querySelector('[data-resposta-input="'+id+'"]');
+    var resposta = textarea.value.trim();
+    if (!resposta){ showToast('Escreva uma resposta antes de enviar.', true); return; }
+    respBtn.disabled = true;
+    const { error } = await supabaseClient.from('solicitacoes').update({ resposta: resposta, respondido_em: new Date().toISOString() }).eq('id', id);
+    respBtn.disabled = false;
+    if (error){ showToast('Erro: ' + error.message, true); return; }
+    showToast('Resposta enviada ao morador!');
+    renderSolicitacoes();
+    return;
+  }
   var btn = e.target.closest('[data-toggle-solicitacao]'); if (!btn) return;
   var novoStatus = btn.getAttribute('data-status') === 'resolvida' ? 'aberta' : 'resolvida';
   await supabaseClient.from('solicitacoes').update({ status: novoStatus }).eq('id', btn.getAttribute('data-toggle-solicitacao'));

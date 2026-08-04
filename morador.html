@@ -698,6 +698,7 @@ function renderMinhasSolicitacoes(){
         '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px"><b style="font-size:13px">' + tipoLabel + ' · ' + new Date(s.criado_em).toLocaleDateString('pt-BR') + '</b>' + statusPill + '</div>' +
         '<div style="font-size:12.5px; color:var(--ink-2)">' + s.mensagem + '</div>' +
         (s.foto_url ? '<a href="' + s.foto_url + '" target="_blank" rel="noopener" style="font-size:12px; color:var(--accent-strong)">Ver foto anexada</a>' : '') +
+        (s.resposta ? '<div style="background:var(--accent-wash); border-radius:8px; padding:8px 10px; margin-top:2px"><div style="font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--accent-strong); margin-bottom:3px">Resposta do síndico</div><div style="font-size:12.5px; color:var(--ink)">' + s.resposta + '</div></div>' : '') +
         '</div>';
     }).join('');
   });
