@@ -89,8 +89,8 @@
       </div>
 
       <div class="card">
-        <div class="card-head"><span class="card-title">Todas as casas</span><span class="card-sub">01 a 27</span></div>
-        <table><thead><tr><th>Casa</th><th>Responsável</th><th>Situação do mês</th><th class="right">Débito antigo</th></tr></thead><tbody id="casas-tbody"></tbody></table>
+        <div class="card-head"><span class="card-title">Todas as casas</span><span class="card-sub">01 a 27 — marque "Isenta" pra quem não paga taxa (ex.: síndico)</span></div>
+        <table><thead><tr><th>Casa</th><th>Responsável</th><th>Situação do mês</th><th class="right">Débito antigo</th><th class="right">Isenta</th></tr></thead><tbody id="casas-tbody"></tbody></table>
       </div>
     </section>
 
@@ -366,13 +366,19 @@ function fillMesSelect(sel){
 // ---------- state ----------
 var CONFIG = {};
 var NOMES = {};
+var ISENTAS = new Set();
+
+async function carregarCasas(){
+  const { data } = await supabaseClient.from('casas').select('numero,isenta');
+  ISENTAS = new Set((data||[]).filter(function(c){return c.isenta;}).map(function(c){return c.numero;}));
+}
 
 async function iniciar(){
   fillMesSelect(document.getElementById('pg-mes'));
   fillMesSelect(document.getElementById('contas-mes'));
   document.getElementById('pg-data').valueAsDate = new Date();
 
-  await carregarMoradoresENomes();
+  await Promise.all([ carregarMoradoresENomes(), carregarCasas() ]);
   fillCasaSelect(document.getElementById('pg-casa'), NOMES);
   fillCasaSelect(document.getElementById('db-casa'), NOMES);
   fillCasaSelect(document.getElementById('mor-casa'), NOMES);
@@ -431,20 +437,23 @@ async function renderVisaoGeral(){
     supabaseClient.from('debitos_antigos').select('casa,valor'),
   ]);
   const casasPagas = new Set((pagos||[]).map(function(p){return p.casa;}));
-  const emAberto = 27 - casasPagas.size;
-  const pct = Math.round(emAberto/27*1000)/10;
+  const cobraveis = 27 - ISENTAS.size;
+  let emAberto = 0;
+  for (let c=1;c<=27;c++){ if (!ISENTAS.has(c) && !casasPagas.has(c)) emAberto++; }
+  const emDia = cobraveis - emAberto;
+  const pct = cobraveis ? Math.round(emAberto/cobraveis*1000)/10 : 0;
   const totalDebitos = (debitos||[]).reduce(function(s,d){return s+Number(d.valor);},0);
 
   document.getElementById('vg-stats').innerHTML =
-    '<div class="card stat"><div class="stat-label">Casas</div><div class="stat-value" style="font-size:22px">27</div><div class="stat-delta">01 a 27, sem blocos</div></div>' +
-    '<div class="card stat"><div class="stat-label">Inadimplência ' + MESES_PT[hoje.getMonth()].toLowerCase() + '</div><div class="stat-value" style="font-size:22px; color:var(--critical)">' + pct.toLocaleString('pt-BR') + '%</div><div class="stat-delta">' + emAberto + ' casas em aberto</div></div>' +
+    '<div class="card stat"><div class="stat-label">Casas</div><div class="stat-value" style="font-size:22px">27</div><div class="stat-delta">' + (ISENTAS.size ? ISENTAS.size + ' isenta' + (ISENTAS.size>1?'s':'') + ' de taxa' : '01 a 27, sem blocos') + '</div></div>' +
+    '<div class="card stat"><div class="stat-label">Inadimplência ' + MESES_PT[hoje.getMonth()].toLowerCase() + '</div><div class="stat-value" style="font-size:22px; color:var(--critical)">' + pct.toLocaleString('pt-BR') + '%</div><div class="stat-delta">' + emAberto + ' de ' + cobraveis + ' casas cobráveis</div></div>' +
     '<div class="card stat"><div class="stat-label">Débitos antigos</div><div class="stat-value num" style="font-size:22px; color:var(--critical)">' + brl(totalDebitos) + '</div><div class="stat-delta">' + (debitos||[]).length + ' casas, valor fixo</div></div>' +
     '<div class="card stat"><div class="stat-label">Fundo de reserva</div><div class="stat-value num" style="font-size:22px" id="vg-fundo-reserva">' + brl(CONFIG.fundo_reserva) + '</div><div class="stat-delta">Reservado, protegido</div></div>' +
     '<div class="card stat"><div class="stat-label">Saldo em caixa</div><div class="stat-value num" style="font-size:22px" id="vg-saldo-caixa">' + brl(CONFIG.saldo_caixa) + '</div><div class="stat-delta">Sem o fundo de reserva</div></div>';
 
   document.getElementById('vg-propbar').innerHTML =
     '<div class="propbar"><span style="width:' + (100-pct) + '%; background:var(--good)"></span><span style="width:' + pct + '%; background:var(--critical)"></span></div>' +
-    '<div class="legend-row"><span class="legend-item"><span class="swatch" style="background:var(--good)"></span>Em dia — ' + casasPagas.size + '</span><span class="legend-item"><span class="swatch" style="background:var(--critical)"></span>Em aberto — ' + emAberto + '</span></div>';
+    '<div class="legend-row"><span class="legend-item"><span class="swatch" style="background:var(--good)"></span>Em dia — ' + emDia + '</span><span class="legend-item"><span class="swatch" style="background:var(--critical)"></span>Em aberto — ' + emAberto + '</span></div>';
 
   const taxa = Number(CONFIG.valor_taxa||0), multaPct = Number(CONFIG.multa_pct||0), jurosPct = Number(CONFIG.juros_pct||0);
   const vencimento = new Date(hoje.getFullYear(), hoje.getMonth(), 10);
@@ -452,6 +461,7 @@ async function renderVisaoGeral(){
   const total = taxa + (dias>0 ? taxa*multaPct/100 + taxa*jurosPct/100*(dias/30) : 0);
   let rows = '';
   for (let c=1;c<=27;c++){
+    if (ISENTAS.has(c)) continue;
     if (!casasPagas.has(c)) rows += '<tr><td>Casa ' + String(c).padStart(2,'0') + '</td><td class="right num">' + brl(total) + '</td></tr>';
   }
   document.getElementById('vg-atraso-tbody').innerHTML = rows || '<tr><td colspan="2" style="color:var(--muted)">Nenhuma casa em aberto este mês.</td></tr>';
@@ -469,10 +479,21 @@ async function renderCasasTable(){
   let rows = '';
   for (let c=1;c<=27;c++){
     const deb = debMap[c];
-    rows += '<tr><td>Casa ' + String(c).padStart(2,'0') + '</td><td>' + (NOMES[c] || '<span style="color:var(--muted)">Sem cadastro</span>') + '</td><td>' + (pagasSet.has(c) ? pillGood() : pillCrit('Em aberto')) + '</td><td class="right num">' + (deb ? brl(deb.valor) : '—') + '</td></tr>';
+    const isenta = ISENTAS.has(c);
+    const situacao = isenta ? '<span class="pill" style="background:var(--surface-2); color:var(--muted)">Isenta</span>' : (pagasSet.has(c) ? pillGood() : pillCrit('Em aberto'));
+    rows += '<tr><td>Casa ' + String(c).padStart(2,'0') + '</td><td>' + (NOMES[c] || '<span style="color:var(--muted)">Sem cadastro</span>') + '</td><td>' + situacao + '</td><td class="right num">' + (deb ? brl(deb.valor) : '—') + '</td><td class="right"><input type="checkbox" data-toggle-isenta="'+c+'" '+(isenta?'checked':'')+' style="width:16px; height:16px; cursor:pointer"></td></tr>';
   }
   document.getElementById('casas-tbody').innerHTML = rows;
 }
+document.getElementById('casas-tbody').addEventListener('change', async function(e){
+  var chk = e.target.closest('[data-toggle-isenta]'); if (!chk) return;
+  const casa = parseInt(chk.getAttribute('data-toggle-isenta'),10);
+  const { error } = await supabaseClient.from('casas').update({ isenta: chk.checked }).eq('numero', casa);
+  if (error){ showToast('Erro: ' + error.message, true); chk.checked = !chk.checked; return; }
+  showToast('Casa ' + String(casa).padStart(2,'0') + (chk.checked ? ' marcada como isenta.' : ' não é mais isenta.'));
+  await carregarCasas();
+  renderCasasTable(); renderVisaoGeral();
+});
 
 async function renderDebitosTable(){
   const { data } = await supabaseClient.from('debitos_antigos').select('*').order('casa');

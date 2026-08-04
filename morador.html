@@ -231,22 +231,24 @@ function pillGood(){ return '<span class="pill pill-good"><svg viewBox="0 0 24 2
 function pillCrit(txt){ return '<span class="pill pill-critical"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 8v5M12 16h.01"/></svg>'+txt+'</span>'; }
 
 // ---------- state ----------
-var STATE = { morador:null, config:null, debito:null, pagamentos:[], servicos:[], reservas:[] };
+var STATE = { morador:null, config:null, debito:null, pagamentos:[], servicos:[], reservas:[], isenta:false };
 
 async function carregarTudo(){
   const hoje = new Date();
 
-  const [{data:morador}, {data:config}, {data:debito}, {data:pagamentos}, {data:servicos}, {data:reservasCasa}] = await Promise.all([
+  const [{data:morador}, {data:config}, {data:debito}, {data:pagamentos}, {data:servicos}, {data:reservasCasa}, {data:casaRow}] = await Promise.all([
     supabaseClient.from('moradores').select('*').eq('casa', CASA).maybeSingle(),
     supabaseClient.from('config_geral').select('*').eq('id',1).maybeSingle(),
     supabaseClient.from('debitos_antigos').select('*').eq('casa', CASA).maybeSingle(),
     supabaseClient.from('pagamentos').select('*').eq('casa', CASA).order('data_pagamento',{ascending:false}).limit(12),
     supabaseClient.from('servicos').select('*').order('criado_em',{ascending:false}).limit(10),
     supabaseClient.from('reservas').select('*').gte('data', new Date(hoje.getFullYear(),hoje.getMonth(),1).toISOString().slice(0,10)),
+    supabaseClient.from('casas').select('isenta').eq('numero', CASA).maybeSingle(),
   ]);
 
   STATE.morador = morador; STATE.config = config || {}; STATE.debito = debito;
   STATE.pagamentos = pagamentos || []; STATE.servicos = servicos || []; STATE.reservas = reservasCasa || [];
+  STATE.isenta = !!(casaRow && casaRow.isenta);
 
   document.getElementById('m-casa-nome').textContent = 'Casa ' + String(CASA).padStart(2,'0');
   document.getElementById('ph-greet').textContent = (hoje.getHours() < 12 ? 'Bom dia!' : hoje.getHours() < 18 ? 'Boa tarde!' : 'Boa noite!');
@@ -277,7 +279,7 @@ function calcularTaxaMes(hoje){
 function renderInicio(hoje){
   const t = calcularTaxaMes(hoje);
   const pend = [];
-  if (!t.jaPago) pend.push(t.diasAtraso > 0 ? 'Taxa de ' + t.label + ' em atraso' : 'Taxa de ' + t.label + ' a vencer');
+  if (!STATE.isenta && !t.jaPago) pend.push(t.diasAtraso > 0 ? 'Taxa de ' + t.label + ' em atraso' : 'Taxa de ' + t.label + ' a vencer');
   if (STATE.debito) pend.push('Débito anterior de ' + brl(STATE.debito.valor));
 
   const pontualidade = calcularPontualidade();
@@ -288,11 +290,15 @@ function renderInicio(hoje){
     : '<div class="stat-value" style="font-size:19px; color:var(--good-text)">Tudo em dia</div><div class="stat-delta">Nenhuma pendência no momento</div>';
   html += '</div>';
 
-  const prox = new Date(hoje.getFullYear(), hoje.getMonth()+ (hoje.getDate()>10?1:0), 10);
-  html += '<div class="grid grid-2">' +
-    '<div class="card stat"><div class="stat-label">Próx. vencimento</div><div class="stat-value" style="font-size:17px">' + prox.getDate() + ' de ' + MESES_PT[prox.getMonth()].toLowerCase() + '</div><div class="stat-delta">' + brl(STATE.config.valor_taxa) + '</div></div>' +
-    '<div class="card stat"><div class="stat-label">Pontualidade</div><div class="stat-value" style="font-size:17px">' + pontualidade.pct + '%</div><div class="stat-delta">' + pontualidade.emDia + ' de ' + pontualidade.total + ' em dia</div></div>' +
-  '</div>';
+  if (STATE.isenta){
+    html += '<div class="card"><div class="card-head"><span class="card-title">Taxa condominial</span></div><p style="font-size:13px; color:var(--ink-2)">Sua casa é isenta da taxa condominial.</p></div>';
+  } else {
+    const prox = new Date(hoje.getFullYear(), hoje.getMonth()+ (hoje.getDate()>10?1:0), 10);
+    html += '<div class="grid grid-2">' +
+      '<div class="card stat"><div class="stat-label">Próx. vencimento</div><div class="stat-value" style="font-size:17px">' + prox.getDate() + ' de ' + MESES_PT[prox.getMonth()].toLowerCase() + '</div><div class="stat-delta">' + brl(STATE.config.valor_taxa) + '</div></div>' +
+      '<div class="card stat"><div class="stat-label">Pontualidade</div><div class="stat-value" style="font-size:17px">' + pontualidade.pct + '%</div><div class="stat-delta">' + pontualidade.emDia + ' de ' + pontualidade.total + ' em dia</div></div>' +
+    '</div>';
+  }
 
   html += '<div class="card"><div class="card-head"><span class="card-title">Avisos do condomínio</span></div><div class="timeline">';
   if (!STATE.servicos.length) html += '<div style="color:var(--muted); font-size:13px">Nenhum aviso no momento.</div>';
@@ -335,6 +341,9 @@ function renderTaxas(hoje){
   const t = calcularTaxaMes(hoje);
   let html = '';
 
+  if (STATE.isenta){
+    html += '<div class="card"><div class="card-head"><span class="card-title">Taxa condominial</span></div><p style="font-size:13px; color:var(--ink-2)">Sua casa é isenta da taxa condominial mensal — nenhuma cobrança aparece aqui.</p></div>';
+  } else {
   html += '<div class="card"><div class="card-head"><span class="card-title">Taxa — ' + t.label + '</span>';
   html += t.jaPago ? '<span class="pill pill-good"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg>Paga</span>'
         : t.diasAtraso > 0 ? '<span class="pill pill-critical"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 8v5M12 16h.01"/></svg>' + t.diasAtraso + ' dias em atraso</span>'
@@ -360,6 +369,7 @@ function renderTaxas(hoje){
     html += '<p style="font-size:13px; color:var(--good-text)">Taxa de ' + t.label + ' já paga. Obrigado!</p>';
   }
   html += '</div>';
+  }
 
   if (STATE.debito){
     html += '<div class="card"><div class="card-head"><span class="card-title">Débitos anteriores</span></div>' +
@@ -392,20 +402,24 @@ function renderTaxas(hoje){
 
 function renderResumo(hoje){
   Promise.all([
-    supabaseClient.from('casas').select('numero', {count:'exact', head:true}),
-  ]).then(async function(){
+    supabaseClient.from('casas').select('numero,isenta'),
+  ]).then(async function(results){
+    const casasIsentas = new Set((results[0].data||[]).filter(function(c){return c.isenta;}).map(function(c){return c.numero;}));
+    const cobraveis = 27 - casasIsentas.size;
     const label = mesRefLabel(hoje);
     const { data: pagosMes } = await supabaseClient.from('pagamentos').select('casa').eq('mes_ref', label);
-    const casasComPagamento = new Set((pagosMes||[]).map(function(p){return p.casa;})).size;
-    const emAberto = 27 - casasComPagamento;
-    const pctInad = Math.round(emAberto/27*1000)/10;
+    const pagasSet = new Set((pagosMes||[]).map(function(p){return p.casa;}));
+    let emAberto = 0;
+    for (let c=1;c<=27;c++){ if (!casasIsentas.has(c) && !pagasSet.has(c)) emAberto++; }
+    const casasComPagamento = cobraveis - emAberto;
+    const pctInad = cobraveis ? Math.round(emAberto/cobraveis*1000)/10 : 0;
 
     const { data: debitosTodos } = await supabaseClient.from('debitos_antigos').select('valor');
     const totalDebitosAntigos = (debitosTodos||[]).reduce(function(s,d){return s+Number(d.valor);},0);
 
     let html = '<div class="card"><div class="card-head"><span class="card-title">Inadimplência do mês — ' + MESES_PT[hoje.getMonth()] + '</span></div>' +
       '<div class="stat-value" style="font-size:30px">' + pctInad.toLocaleString('pt-BR') + '%<span style="font-size:12.5px; font-weight:500; color:var(--muted)"> das casas</span></div>' +
-      '<div class="stat-delta" style="margin-bottom:12px">' + emAberto + ' de 27 casas com a taxa do mês em aberto</div>' +
+      '<div class="stat-delta" style="margin-bottom:12px">' + emAberto + ' de ' + cobraveis + ' casas cobráveis com a taxa do mês em aberto' + (casasIsentas.size ? ' (' + casasIsentas.size + ' isenta' + (casasIsentas.size>1?'s':'') + ' de 27 no total)' : '') + '</div>' +
       '<div class="propbar"><span style="width:' + (100-pctInad) + '%; background:var(--good)"></span><span style="width:' + pctInad + '%; background:var(--critical)"></span></div>' +
       '<div class="legend-row"><span class="legend-item"><span class="swatch" style="background:var(--good)"></span>Em dia — ' + casasComPagamento + '</span><span class="legend-item"><span class="swatch" style="background:var(--critical)"></span>Em aberto — ' + emAberto + '</span></div></div>';
 

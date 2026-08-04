@@ -5,7 +5,8 @@
 
 -- 27 casas fixas, numeradas 01 a 27, sem bloco.
 create table if not exists casas (
-  numero integer primary key check (numero between 1 and 27)
+  numero integer primary key check (numero between 1 and 27),
+  isenta boolean not null default false
 );
 insert into casas (numero) select generate_series(1,27) on conflict do nothing;
 alter table casas disable row level security;
