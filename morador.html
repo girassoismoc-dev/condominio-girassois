@@ -562,16 +562,18 @@ function renderContas(){
     supabaseClient.from('receitas').select('*').eq('mes_ref', label),
     supabaseClient.from('despesas').select('*').eq('mes_ref', label),
     supabaseClient.from('documentos').select('*').eq('tipo','prestacao_contas').eq('mes_ref', label).maybeSingle(),
+    supabaseClient.from('fechamentos_mensais').select('*').eq('mes_ref', label).maybeSingle(),
   ]).then(function(results){
-    const receitas = results[0].data || [], despesas = results[1].data || [], doc = results[2].data;
+    const receitas = results[0].data || [], despesas = results[1].data || [], doc = results[2].data, fechamento = results[3].data;
     const totR = receitas.reduce(function(s,r){return s+Number(r.valor);},0);
     const totD = despesas.reduce(function(s,r){return s+Number(r.valor);},0);
     let html = '<div class="grid grid-2">' +
       '<div class="card stat"><div class="stat-label">Receitas · ' + label + '</div><div class="stat-value num" style="font-size:19px; color:var(--good-text)">' + brl(totR) + '</div></div>' +
       '<div class="card stat"><div class="stat-label">Despesas · ' + label + '</div><div class="stat-value num" style="font-size:19px; color:var(--critical)">' + brl(totD) + '</div></div></div>';
     html += '<div class="grid grid-2">' +
-      '<div class="card stat"><div class="stat-label">Fundo de reserva</div><div class="stat-value num" style="font-size:19px">' + brl(STATE.config.fundo_reserva) + '</div></div>' +
-      '<div class="card stat"><div class="stat-label">Saldo em caixa</div><div class="stat-value num" style="font-size:19px">' + brl(STATE.config.saldo_caixa) + '</div><div class="stat-delta">Sem o fundo de reserva</div></div></div>';
+      '<div class="card stat"><div class="stat-label">Fundo de reserva · ' + label + '</div><div class="stat-value num" style="font-size:19px">' + brl(fechamento ? fechamento.fundo_reserva : 0) + '</div></div>' +
+      '<div class="card stat"><div class="stat-label">Saldo em caixa · ' + label + '</div><div class="stat-value num" style="font-size:19px">' + brl(fechamento ? fechamento.saldo_caixa : 0) + '</div><div class="stat-delta">Sem o fundo de reserva</div></div></div>';
+    if (!fechamento) html += '<p style="font-size:12.5px; color:var(--muted); margin:2px 2px 0">Fundo/caixa de ' + label + ' ainda não foi lançado pelo síndico.</p>';
     html += '<div class="card"><div class="card-head"><span class="card-title">Despesas do mês</span></div><table><tbody>';
     html += despesas.length ? despesas.map(function(d){ return '<tr><td>'+d.descricao+'</td><td class="right num">'+brl(d.valor)+'</td></tr>'; }).join('') : '<tr><td style="color:var(--muted)">Nenhuma despesa lançada.</td></tr>';
     html += '</tbody></table></div>';

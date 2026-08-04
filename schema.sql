@@ -26,6 +26,8 @@ create table if not exists moradores (
 alter table moradores disable row level security;
 
 -- Configuração financeira/geral — sempre 1 linha só (id=1).
+-- fundo_reserva/saldo_caixa aqui são legado (valor único, não histórico) —
+-- os valores reais por mês ficam em "fechamentos_mensais" agora.
 create table if not exists config_geral (
   id integer primary key default 1 check (id = 1),
   valor_taxa numeric not null default 75,
@@ -41,6 +43,15 @@ create table if not exists config_geral (
 );
 insert into config_geral (id) values (1) on conflict (id) do nothing;
 alter table config_geral disable row level security;
+
+-- Fundo de reserva e saldo em caixa, um fechamento por mês (igual receitas/despesas).
+create table if not exists fechamentos_mensais (
+  mes_ref text primary key,
+  fundo_reserva numeric not null default 0,
+  saldo_caixa numeric not null default 0,
+  atualizado_em timestamptz not null default now()
+);
+alter table fechamentos_mensais disable row level security;
 
 -- Pagamentos de taxa lançados pelo síndico (histórico, mês a mês).
 create table if not exists pagamentos (
