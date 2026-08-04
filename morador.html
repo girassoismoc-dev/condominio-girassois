@@ -186,6 +186,7 @@
 // ---------- auth guard ----------
 const CASA = parseInt(localStorage.getItem('casaLogada') || '', 10);
 if (!CASA){ location.href = 'login.html'; }
+else { supabaseClient.from('moradores').update({ ultimo_acesso: new Date().toISOString() }).eq('casa', CASA).then(function(){}); }
 
 const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 function mesRefLabel(d){ return MESES_PT[d.getMonth()] + '/' + d.getFullYear(); }

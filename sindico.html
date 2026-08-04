@@ -23,6 +23,7 @@
       <button class="sindico-nav-btn active" data-view="visao"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 11.5 12 4l9 7.5M5 10v10h14V10"/></svg>Visão geral</button>
       <button class="sindico-nav-btn" data-view="casas"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="10" width="17" height="10.5" rx="1.5"/><path d="M3.5 10 12 3.5 20.5 10"/></svg>Casas</button>
       <button class="sindico-nav-btn" data-view="moradores"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="8" r="3.3"/><path d="M2.5 20c1-3.8 3.6-6 6.5-6s5.5 2.2 6.5 6"/><circle cx="18" cy="8.5" r="2.6"/><path d="M15.8 14.3c2.4.3 4.3 2.2 5.1 5.2"/></svg>Moradores</button>
+      <button class="sindico-nav-btn" data-view="acessos"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3.5 2"/></svg>Último acesso</button>
       <button class="sindico-nav-btn" data-view="documentos"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 3h7l4 4v14H7z M14 3v4h4M9 13h6M9 17h6"/></svg>Documentos</button>
       <button class="sindico-nav-btn" data-view="cobertura"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12 12 4l9 8M5 11v9h14v-9"/></svg>Cobertura</button>
       <button class="sindico-nav-btn" data-view="servicos"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14.7 6.3a3 3 0 0 0-4.1 3.9L4 17v3h3l6.8-6.8a3 3 0 0 0 3.9-4.1l-2.6 2.6-2-2z"/></svg>Serviços</button>
@@ -121,6 +122,14 @@
       <div class="card">
         <div class="card-head"><span class="card-title">Moradores cadastrados</span></div>
         <table><thead><tr><th>Casa</th><th>Nome</th><th>Tipo</th><th>Telefone</th><th></th></tr></thead><tbody id="moradores-tbody"></tbody></table>
+      </div>
+    </section>
+
+    <!-- ÚLTIMO ACESSO -->
+    <section class="view" data-view="acessos">
+      <div class="card">
+        <div class="card-head"><span class="card-title">Último acesso dos moradores</span><span class="card-sub">Quando cada casa abriu o painel próprio pela última vez</span></div>
+        <table><thead><tr><th>Casa</th><th>Nome</th><th>Último acesso</th></tr></thead><tbody id="acessos-tbody"></tbody></table>
       </div>
     </section>
 
@@ -375,7 +384,7 @@ document.getElementById('logout-btn-sindico').addEventListener('click', async fu
 });
 
 // ---------- nav ----------
-var titlesSindico = { visao:'Visão geral', casas:'Casas', moradores:'Moradores', documentos:'Documentos', cobertura:'Cobertura', servicos:'Serviços', reserva:'Reserva', contas:'Prestação de contas', solicitacoes:'Solicitações', config:'Configurações' };
+var titlesSindico = { visao:'Visão geral', casas:'Casas', moradores:'Moradores', acessos:'Último acesso', documentos:'Documentos', cobertura:'Cobertura', servicos:'Serviços', reserva:'Reserva', contas:'Prestação de contas', solicitacoes:'Solicitações', config:'Configurações' };
 document.querySelectorAll('#app-sindico [data-view]').forEach(function(el){
   el.addEventListener('click', function(){
     var view = el.dataset.view;
@@ -463,6 +472,7 @@ async function iniciar(){
     renderReservas(),
     renderContas(),
     renderSolicitacoes(),
+    renderUltimosAcessos(),
   ]);
 
   document.getElementById('contas-mes').addEventListener('change', renderContas);
@@ -627,6 +637,13 @@ function renderMoradoresTable(lista){
   document.getElementById('moradores-tbody').innerHTML = (lista&&lista.length) ? lista.map(function(m){
     return '<tr><td>Casa ' + String(m.casa).padStart(2,'0') + '</td><td>' + m.nome + '</td><td>' + m.tipo + '</td><td>' + (m.telefone||'—') + '</td><td class="right"><button class="btn btn-ghost btn-sm" data-edit-morador="'+m.casa+'">Editar</button></td></tr>';
   }).join('') : '<tr><td colspan="5" style="color:var(--muted)">Nenhum morador cadastrado ainda.</td></tr>';
+}
+async function renderUltimosAcessos(){
+  const { data } = await supabaseClient.from('moradores').select('casa,nome,ultimo_acesso').order('ultimo_acesso', { ascending:false, nullsFirst:false });
+  const lista = data || [];
+  document.getElementById('acessos-tbody').innerHTML = lista.length ? lista.map(function(m){
+    return '<tr><td>Casa ' + String(m.casa).padStart(2,'0') + '</td><td>' + m.nome + '</td><td' + (m.ultimo_acesso ? '' : ' style="color:var(--muted)"') + '>' + (m.ultimo_acesso ? new Date(m.ultimo_acesso).toLocaleString('pt-BR') : 'Nunca acessou') + '</td></tr>';
+  }).join('') : '<tr><td colspan="3" style="color:var(--muted)">Nenhum morador cadastrado ainda.</td></tr>';
 }
 document.getElementById('moradores-tbody').addEventListener('click', async function(e){
   var btn = e.target.closest('[data-edit-morador]'); if (!btn) return;
