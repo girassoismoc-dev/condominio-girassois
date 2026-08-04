@@ -5,8 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Parque dos Girassóis — Portal do Condomínio</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg transform='translate(50,50)'%3E%3Cg fill='%23F2A93C'%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(30)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(60)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(90)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(120)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(150)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(180)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(210)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(240)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(270)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(300)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(330)'/%3E%3C/g%3E%3Ccircle r='15' fill='%236B4226'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#2C4636">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Girassóis">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>if (localStorage.getItem('casaLogada')) { location.replace('morador.html'); }</script>
 </head>
 <body>
 
@@ -14,6 +21,15 @@
 
 <div id="login-screen">
   <div class="login-card">
+    <div class="pwa-install-banner hidden" id="pwa-install-banner">
+      <div class="pwa-install-text">
+        <b>Instalar o app</b>
+        <span id="pwa-install-desc">Acesso mais rápido, direto na tela inicial do celular.</span>
+        <div class="pwa-install-steps" id="pwa-install-steps"></div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="pwa-install-btn" style="width:auto">Instalar</button>
+      <button type="button" class="pwa-install-close" id="pwa-install-close" aria-label="Fechar">×</button>
+    </div>
     <div class="login-brand">
       <svg class="sun-mark" width="46" height="46" viewBox="0 0 100 100"><g transform="translate(50,50)"><g id="petals-login"></g><circle class="core" r="15"/></g></svg>
       <h1>Parque dos Girassóis</h1>
@@ -55,6 +71,48 @@ function petalsMarkup(n, rx, ry, cy){
   for (var i=0;i<n;i++){ var deg = (360/n)*i; s += '<ellipse class="petal" cx="0" cy="'+cy+'" rx="'+rx+'" ry="'+ry+'" transform="rotate('+deg+')"/>'; }
   return s;
 }
+if ('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(function(){}); }
+
+(function(){
+  var banner = document.getElementById('pwa-install-banner');
+  var btn = document.getElementById('pwa-install-btn');
+  var steps = document.getElementById('pwa-install-steps');
+  var closeBtn = document.getElementById('pwa-install-close');
+
+  var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  if (isStandalone || localStorage.getItem('pwaInstallDismissed') === '1') return;
+
+  closeBtn.addEventListener('click', function(){
+    banner.classList.add('hidden');
+    localStorage.setItem('pwaInstallDismissed', '1');
+  });
+
+  var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  if (isIOS){
+    banner.classList.remove('hidden');
+    btn.textContent = 'Como instalar';
+    btn.addEventListener('click', function(){
+      steps.innerHTML = 'Toque no botão <b>Compartilhar</b> (o quadrado com a seta pra cima) na barra do Safari e depois em <b>"Adicionar à Tela de Início"</b>.';
+      steps.classList.add('on');
+    });
+  } else {
+    var deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e){
+      e.preventDefault();
+      deferredPrompt = e;
+      banner.classList.remove('hidden');
+    });
+    btn.addEventListener('click', async function(){
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      banner.classList.add('hidden');
+    });
+    window.addEventListener('appinstalled', function(){ banner.classList.add('hidden'); });
+  }
+})();
+
 document.getElementById('petals-login').innerHTML = petalsMarkup(12, 9, 21, -21);
 document.querySelectorAll('.core').forEach(function(core){
   var g = core.parentNode;
@@ -147,9 +205,9 @@ document.getElementById('login-form').addEventListener('submit', async function(
       if (error){ showError('Erro ao consultar: ' + error.message); return; }
       if (!data){ showError('Essa casa ainda não tem morador cadastrado. Fale com o síndico.'); return; }
       if (String(data.senha) !== senha){ showError('Senha incorreta.'); return; }
-      sessionStorage.setItem('casaLogada', String(casa));
-      sessionStorage.setItem('nomeMorador', data.nome);
-      sessionStorage.setItem('precisaTrocarSenha', data.precisa_trocar_senha ? '1' : '0');
+      localStorage.setItem('casaLogada', String(casa));
+      localStorage.setItem('nomeMorador', data.nome);
+      localStorage.setItem('precisaTrocarSenha', data.precisa_trocar_senha ? '1' : '0');
       location.href = 'morador.html';
     }
   } catch (err) {

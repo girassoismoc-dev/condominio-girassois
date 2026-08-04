@@ -5,9 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Meu painel — Parque dos Girassóis</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg transform='translate(50,50)'%3E%3Cg fill='%23F2A93C'%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(30)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(60)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(90)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(120)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(150)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(180)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(210)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(240)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(270)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(300)'/%3E%3Cellipse cx='0' cy='-21' rx='9' ry='21' transform='rotate(330)'/%3E%3C/g%3E%3Ccircle r='15' fill='%236B4226'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#2C4636">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Girassóis">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>if ('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(function(){}); }</script>
 </head>
 <body>
 
@@ -177,7 +184,7 @@
 <script src="supabase-config.js"></script>
 <script>
 // ---------- auth guard ----------
-const CASA = parseInt(sessionStorage.getItem('casaLogada') || '', 10);
+const CASA = parseInt(localStorage.getItem('casaLogada') || '', 10);
 if (!CASA){ location.href = 'login.html'; }
 
 const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -257,7 +264,7 @@ function renderPixQR(el, opts){
 }
 
 document.getElementById('m-logout').addEventListener('click', function(){
-  sessionStorage.removeItem('casaLogada'); sessionStorage.removeItem('nomeMorador');
+  localStorage.removeItem('casaLogada'); localStorage.removeItem('nomeMorador'); localStorage.removeItem('precisaTrocarSenha');
   location.href = 'login.html';
 });
 
@@ -859,11 +866,11 @@ document.getElementById('troca-senha-form').addEventListener('submit', async fun
   const { error } = await supabaseClient.from('moradores').update({ senha: nova, precisa_trocar_senha: false }).eq('casa', CASA);
   btn.disabled = false; btn.textContent = 'Salvar e entrar';
   if (error){ erroEl.textContent = 'Erro ao salvar: ' + error.message; erroEl.classList.add('on'); return; }
-  sessionStorage.setItem('precisaTrocarSenha', '0');
+  localStorage.setItem('precisaTrocarSenha', '0');
   mostrarApp();
 });
 
-if (sessionStorage.getItem('precisaTrocarSenha') === '1'){
+if (localStorage.getItem('precisaTrocarSenha') === '1'){
   document.getElementById('troca-senha-screen').classList.remove('hidden');
 } else {
   mostrarApp();
