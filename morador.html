@@ -118,7 +118,8 @@
 
       <section class="m-view" data-mview="contas">
         <div class="m-section-title">Prestação de contas</div>
-        <div id="contas-conteudo" class="status-msg"><span class="spinner"></span> Carregando...</div>
+        <div class="field" style="max-width:220px"><label>Mês</label><select id="contas-mes-sel"></select></div>
+        <div id="contas-resultado" class="status-msg"><span class="spinner"></span> Carregando...</div>
       </section>
 
     </div>
@@ -300,7 +301,8 @@ async function carregarTudo(){
   renderServicos();
   renderCalendario(hoje);
   renderMinhasReservas();
-  renderContas(hoje);
+  popularSelectContas(hoje);
+  renderContas();
 }
 
 var DIAS_CARENCIA_JUROS = 10;
@@ -576,8 +578,20 @@ function renderServicos(){
     : '<p style="color:var(--muted); font-size:13px">Nenhum serviço registrado ainda.</p>';
 }
 
-function renderContas(hoje){
-  const label = mesRefLabel(new Date(hoje.getFullYear(), hoje.getMonth()-1, 1)); // mês fechado = anterior
+function popularSelectContas(hoje){
+  var sel = document.getElementById('contas-mes-sel');
+  sel.innerHTML = '';
+  for (var i=1;i<=12;i++){ // começa no mês fechado mais recente (o atual ainda não fechou)
+    var d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    var opt = document.createElement('option');
+    opt.value = mesRefLabel(d); opt.textContent = mesRefLabel(d);
+    sel.appendChild(opt);
+  }
+}
+document.getElementById('contas-mes-sel').addEventListener('change', function(){ renderContas(); });
+
+function renderContas(){
+  const label = document.getElementById('contas-mes-sel').value;
   Promise.all([
     supabaseClient.from('receitas').select('*').eq('mes_ref', label),
     supabaseClient.from('despesas').select('*').eq('mes_ref', label),
@@ -596,11 +610,9 @@ function renderContas(hoje){
     html += despesas.length ? despesas.map(function(d){ return '<tr><td>'+d.descricao+'</td><td class="right num">'+brl(d.valor)+'</td></tr>'; }).join('') : '<tr><td style="color:var(--muted)">Nenhuma despesa lançada.</td></tr>';
     html += '</tbody></table></div>';
     if (doc) html += '<div class="card">' + docRow(doc.nome, 'Publicado em ' + new Date(doc.publicado_em).toLocaleDateString('pt-BR'), doc.url) + '</div>';
+    else html += '<p style="font-size:12.5px; color:var(--muted); margin:2px">Nenhum PDF de prestação de contas publicado para ' + label + '.</p>';
 
-    var target = document.querySelector('[data-mview="contas"]');
-    target.querySelectorAll(':scope > *:not(.m-section-title)').forEach(function(n){ n.remove(); });
-    var wrap = document.createElement('div'); wrap.innerHTML = html;
-    Array.from(wrap.childNodes).forEach(function(n){ target.appendChild(n); });
+    document.getElementById('contas-resultado').innerHTML = html;
   });
 }
 
