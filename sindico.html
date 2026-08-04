@@ -160,7 +160,10 @@
           <div></div>
         </div>
         <div class="field" style="margin-top:10px"><label>Descrição (opcional)</label><textarea id="sv-desc" placeholder="Detalhes do serviço" style="margin-top:0"></textarea></div>
-        <button class="btn btn-primary" style="width:auto; margin-top:6px" id="btn-add-servico">Adicionar à lista</button>
+        <div style="display:flex; gap:10px; align-items:center; margin-top:6px">
+          <button class="btn btn-primary" style="width:auto" id="btn-add-servico">Adicionar à lista</button>
+          <button class="btn btn-ghost btn-sm hidden" style="width:auto" id="btn-cancelar-edicao-servico">Cancelar edição</button>
+        </div>
       </div>
       <div class="card">
         <div class="card-head"><span class="card-title">Serviços e implementações realizados</span></div>
@@ -631,10 +634,34 @@ document.getElementById('moradores-tbody').addEventListener('click', async funct
 function servicoRow(sv){
   return '<div class="tl-item '+sv.status+'"><span class="tl-dot"></span><div class="tl-title">'+sv.titulo+'</div><div class="tl-meta">'+sv.meta+'</div>'+(sv.descricao ? '<div class="tl-desc">'+sv.descricao+'</div>' : '')+'</div>';
 }
+function servicoRowSindico(sv){
+  return '<div class="tl-item '+sv.status+'"><span class="tl-dot"></span><div class="tl-title">'+sv.titulo+'</div><div class="tl-meta">'+sv.meta+'</div>'+(sv.descricao ? '<div class="tl-desc">'+sv.descricao+'</div>' : '')+
+    '<button class="btn btn-ghost btn-sm" style="margin-top:8px" data-edit-servico="'+sv.id+'" data-titulo="'+sv.titulo.replace(/"/g,'&quot;')+'" data-meta="'+sv.meta.replace(/"/g,'&quot;')+'" data-status="'+sv.status+'" data-desc="'+(sv.descricao||'').replace(/"/g,'&quot;')+'">Editar</button>' +
+    '</div>';
+}
 async function renderServicos(){
   const { data } = await supabaseClient.from('servicos').select('*').order('criado_em',{ascending:false});
-  document.getElementById('sind-servicos-list').innerHTML = (data&&data.length) ? data.map(servicoRow).join('') : '<p style="color:var(--muted); font-size:13px">Nenhum serviço registrado ainda.</p>';
+  document.getElementById('sind-servicos-list').innerHTML = (data&&data.length) ? data.map(servicoRowSindico).join('') : '<p style="color:var(--muted); font-size:13px">Nenhum serviço registrado ainda.</p>';
 }
+var editandoServicoId = null;
+function cancelarEdicaoServico(){
+  editandoServicoId = null;
+  document.getElementById('sv-titulo').value=''; document.getElementById('sv-meta').value=''; document.getElementById('sv-desc').value=''; document.getElementById('sv-status').value='done';
+  document.getElementById('btn-add-servico').textContent = 'Adicionar à lista';
+  document.getElementById('btn-cancelar-edicao-servico').classList.add('hidden');
+}
+document.getElementById('btn-cancelar-edicao-servico').addEventListener('click', cancelarEdicaoServico);
+document.getElementById('sind-servicos-list').addEventListener('click', function(e){
+  var btn = e.target.closest('[data-edit-servico]'); if (!btn) return;
+  editandoServicoId = btn.getAttribute('data-edit-servico');
+  document.getElementById('sv-titulo').value = btn.getAttribute('data-titulo');
+  document.getElementById('sv-meta').value = btn.getAttribute('data-meta');
+  document.getElementById('sv-status').value = btn.getAttribute('data-status');
+  document.getElementById('sv-desc').value = btn.getAttribute('data-desc');
+  document.getElementById('btn-add-servico').textContent = 'Salvar alteração';
+  document.getElementById('btn-cancelar-edicao-servico').classList.remove('hidden');
+  document.getElementById('sv-titulo').scrollIntoView({ behavior:'smooth', block:'center' });
+});
 
 async function renderDocumentos(){
   const [{data:reg}, {data:atas}] = await Promise.all([
@@ -912,6 +939,17 @@ document.getElementById('btn-add-servico').addEventListener('click', async funct
   const desc = document.getElementById('sv-desc').value.trim();
   if (!titulo || !meta){ showToast('Preencha o título e o "quando".', true); return; }
   const btn = this; btn.disabled = true;
+
+  if (editandoServicoId){
+    const { error } = await supabaseClient.from('servicos').update({ titulo:titulo, meta:meta, descricao:desc||null, status:status }).eq('id', editandoServicoId);
+    btn.disabled = false;
+    if (error){ showToast('Erro: ' + error.message, true); return; }
+    showToast('Serviço atualizado!');
+    cancelarEdicaoServico();
+    renderServicos();
+    return;
+  }
+
   const { error } = await supabaseClient.from('servicos').insert({ titulo:titulo, meta:meta, descricao:desc||null, status:status });
   btn.disabled = false;
   if (error){ showToast('Erro: ' + error.message, true); return; }
