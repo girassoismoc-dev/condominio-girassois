@@ -186,7 +186,20 @@
 // ---------- auth guard ----------
 const CASA = parseInt(localStorage.getItem('casaLogada') || '', 10);
 if (!CASA){ location.href = 'login.html'; }
-else { supabaseClient.from('moradores').update({ ultimo_acesso: new Date().toISOString() }).eq('casa', CASA).then(function(){}); }
+else {
+  supabaseClient.from('moradores').update({ ultimo_acesso: new Date().toISOString() }).eq('casa', CASA).then(function(){});
+  supabaseClient.from('config_geral').select('sessao_min').eq('id', 1).maybeSingle().then(function(res){
+    const servidorMin = res.data && res.data.sessao_min;
+    const localMin = localStorage.getItem('sessaoValidaDesde');
+    if (servidorMin && (!localMin || new Date(localMin) < new Date(servidorMin))){
+      localStorage.removeItem('casaLogada');
+      localStorage.removeItem('nomeMorador');
+      localStorage.removeItem('precisaTrocarSenha');
+      localStorage.removeItem('sessaoValidaDesde');
+      location.href = 'login.html';
+    }
+  });
+}
 
 const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 function mesRefLabel(d){ return MESES_PT[d.getMonth()] + '/' + d.getFullYear(); }
@@ -265,7 +278,7 @@ function renderPixQR(el, opts){
 }
 
 document.getElementById('m-logout').addEventListener('click', function(){
-  localStorage.removeItem('casaLogada'); localStorage.removeItem('nomeMorador'); localStorage.removeItem('precisaTrocarSenha');
+  localStorage.removeItem('casaLogada'); localStorage.removeItem('nomeMorador'); localStorage.removeItem('precisaTrocarSenha'); localStorage.removeItem('sessaoValidaDesde');
   location.href = 'login.html';
 });
 

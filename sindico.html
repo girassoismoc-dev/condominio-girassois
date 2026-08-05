@@ -277,6 +277,12 @@
         <button class="btn btn-primary" style="width:auto" id="btn-salvar-pix">Salvar chave Pix</button>
         <p style="font-size:11.5px; color:var(--muted); margin-top:12px; line-height:1.5">Esse QR já é real, no padrão Pix do Banco Central — pode escanear pra conferir. Aqui em cima ele não tem valor fixo (é só a chave); nas cobranças de cada morador, o QR já vem com o valor certo.</p>
       </div>
+
+      <div class="card">
+        <div class="card-head"><span class="card-title">Segurança</span><span class="card-sub">Forçar todos os moradores a fazer login de novo</span></div>
+        <p style="font-size:12.5px; color:var(--ink-2); margin-bottom:12px; line-height:1.5">Desconecta o app de todos os moradores agora — na próxima vez que abrirem, vão cair na tela de login e precisar digitar a senha de novo. Use se suspeitar que alguém indevido teve acesso.</p>
+        <button class="btn" style="width:auto; background:var(--critical); color:#fff" id="btn-forcar-logout">Forçar logout de todos</button>
+      </div>
     </section>
   </main>
 </div>
@@ -1061,6 +1067,13 @@ document.getElementById('btn-salvar-pix').addEventListener('click', async functi
   document.getElementById('cf-pix-nome-atual').textContent = 'Beneficiário: ' + nome;
   renderPixQR(document.getElementById('qr-sindico'), { chave: CONFIG.pix_chave, tipo: CONFIG.pix_tipo, nome: CONFIG.pix_nome, txid: 'CONDOMINIO' });
   showToast('Chave Pix atualizada!');
+});
+
+document.getElementById('btn-forcar-logout').addEventListener('click', async function(){
+  if (!confirm('Isso vai desconectar todos os moradores agora — na próxima vez que abrirem o app, vão precisar fazer login de novo. Confirma?')) return;
+  const { error } = await supabaseClient.from('config_geral').update({ sessao_min:new Date().toISOString(), atualizado_em:new Date().toISOString() }).eq('id',1);
+  if (error){ showToast('Erro: ' + error.message, true); return; }
+  showToast('Pronto! Todos os moradores vão precisar logar de novo.');
 });
 </script>
 </body>

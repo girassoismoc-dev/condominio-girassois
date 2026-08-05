@@ -205,9 +205,11 @@ document.getElementById('login-form').addEventListener('submit', async function(
       if (error){ showError('Erro ao consultar: ' + error.message); return; }
       if (!data){ showError('Essa casa ainda não tem morador cadastrado. Fale com o síndico.'); return; }
       if (String(data.senha) !== senha){ showError('Senha incorreta.'); return; }
+      const { data: cfg } = await supabaseClient.from('config_geral').select('sessao_min').eq('id', 1).maybeSingle();
       localStorage.setItem('casaLogada', String(casa));
       localStorage.setItem('nomeMorador', data.nome);
       localStorage.setItem('precisaTrocarSenha', data.precisa_trocar_senha ? '1' : '0');
+      localStorage.setItem('sessaoValidaDesde', (cfg && cfg.sessao_min) || new Date().toISOString());
       location.href = 'morador.html';
     }
   } catch (err) {

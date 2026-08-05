@@ -40,6 +40,7 @@ create table if not exists config_geral (
   pix_nome text default 'Condomínio Parque dos Girassóis',
   fundo_reserva numeric not null default 0,
   saldo_caixa numeric not null default 0,
+  sessao_min timestamptz not null default now(),
   atualizado_em timestamptz not null default now()
 );
 insert into config_geral (id) values (1) on conflict (id) do nothing;
